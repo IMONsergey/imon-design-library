@@ -1,0 +1,32 @@
+/* I’MON starter pack. Scope all overrides to .imon-foundation. */
+.imon-foundation {
+  --imon-foundation-bg: #f5f4f0;
+  --imon-foundation-surface: #ffffff;
+  --imon-foundation-text: #20211e;
+  --imon-foundation-muted: #62665e;
+  --imon-foundation-line: #d4d7ce;
+  --imon-foundation-accent: #365640;
+  --imon-foundation-accent-hover: #284431;
+  --imon-foundation-focus: #2354a3;
+  --imon-foundation-error: #a12930;
+  --imon-foundation-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --imon-foundation-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --imon-foundation-text-sm: 0.8125rem;
+  --imon-foundation-text-base: 0.9375rem;
+  --imon-foundation-text-lg: 1.5rem;
+  --imon-foundation-space-1: 0.25rem;
+  --imon-foundation-space-2: 0.5rem;
+  --imon-foundation-space-3: 0.75rem;
+  --imon-foundation-space-4: 1rem;
+  --imon-foundation-space-6: 1.5rem;
+  --imon-foundation-space-8: 2rem;
+  --imon-foundation-space-12: 3rem;
+  --imon-foundation-radius-sm: 0.25rem;
+  --imon-foundation-radius-md: 0.5rem;
+  --imon-foundation-control-height: 2.75rem;
+  color: var(--imon-foundation-text);
+  font-family: var(--imon-foundation-font);
+  font-size: var(--imon-foundation-text-base);
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+}

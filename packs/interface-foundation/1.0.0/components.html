@@ -1,0 +1,25 @@
+<!-- Add tokens.css and components.css to the target project. -->
+<!-- Keep the outer scope. Add your own actions and form validation. -->
+<section class="imon-foundation" aria-label="Компоненты интерфейса">
+  <button class="imf-button" type="button">Основная кнопка</button>
+  <button class="imf-button imf-button--secondary" type="button">Вторичная</button>
+  <button class="imf-button imf-button--quiet" type="button">Спокойная</button>
+  <button class="imf-button" type="button" disabled>Недоступно</button>
+
+  <div class="imf-field">
+    <label class="imf-label" for="imf-project">Название проекта</label>
+    <input class="imf-input" id="imf-project" name="project" type="text" placeholder="Новый проект" aria-describedby="imf-project-hint">
+    <p class="imf-hint" id="imf-project-hint">Короткое название, понятное команде.</p>
+  </div>
+
+  <div class="imf-field">
+    <label class="imf-label" for="imf-required">Обязательное поле</label>
+    <input class="imf-input" id="imf-required" name="required-example" type="text" aria-invalid="true" aria-describedby="imf-required-error" required>
+    <p class="imf-error" id="imf-required-error">Укажите название проекта.</p>
+  </div>
+
+  <label class="imf-check">
+    <input type="checkbox" name="include-notes">
+    <span>Добавить заметки к проекту</span>
+  </label>
+</section>

@@ -1,0 +1,15 @@
+{
+  "namespace": "imon-motion",
+  "duration": {
+    "fast": { "value": 140, "unit": "ms", "use": "button feedback" },
+    "base": { "value": 220, "unit": "ms", "use": "short directional transitions" },
+    "disclose": { "value": 180, "unit": "ms", "use": "native disclosure fade" },
+    "enter": { "value": 420, "unit": "ms", "use": "single non-blocking content entrance" }
+  },
+  "easing": {
+    "settle": [0.22, 1, 0.36, 1],
+    "color": "ease"
+  },
+  "distance": { "hover": "1px", "linkArrow": "3px", "enter": "8px" },
+  "reducedMotion": { "translate": false, "scale": false, "entranceAnimation": false, "keepFocusRing": true }
+}

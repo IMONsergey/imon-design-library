@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "layout-recipes",
+  "version": "1.0.0",
+  "title": "Layout recipes",
+  "summary": "Три адаптивные схемы: редакционный блок, сетка карточек и описание с боковой колонкой. Чистые HTML и CSS.",
+  "category": "templates",
+  "status": "published",
+  "visibility": "public",
+  "tags": ["html", "css", "grid", "responsive", "editorial", "starter"],
+  "license": { "id": "LicenseRef-IMON-Proprietary", "file": "LICENSE.txt", "redistribution": true },
+  "source": { "type": "original", "author": "I’MON" },
+  "review": { "by": "I’MON / automated foundation check", "date": "2026-11-04" },
+  "preview": "preview/index.html",
+  "scripts": false,
+  "files": ["LICENSE.txt", "README.md", "layout.css", "templates.html", "rules.md", "preview/index.html"],
+  "assets": [
+    {
+      "id": "layout-css",
+      "title": "Адаптивные схемы CSS",
+      "type": "stylesheet",
+      "path": "layout.css",
+      "description": "Контейнер, стек, редакционная сетка, карточки и боковая колонка без JavaScript.",
+      "usage": "Подключите layout.css, добавьте внешний класс imon-layout и выберите одну из схем. Используйте свои цвета и контент, сохраняя порядок элементов в DOM."
+    },
+    {
+      "id": "layout-html",
+      "title": "Три HTML-шаблона",
+      "type": "template",
+      "path": "templates.html",
+      "description": "Семантические фрагменты для раздела сайта, каталога и страницы проекта.",
+      "usage": "Возьмите один section из файла. Замените тексты, назначьте уникальные id заголовкам и сохраните связь aria-labelledby. Вставляйте изображения с размерами и содержательным alt."
+    },
+    {
+      "id": "layout-rules",
+      "title": "Правила сетки",
+      "type": "documentation",
+      "path": "rules.md",
+      "description": "Порядок чтения, ширина строки, адаптивность и проверка переполнений.",
+      "usage": "Используйте чеклист после замены демонстрационного контента на реальный. Проверяйте самую длинную строку, а не только аккуратный пример."
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { checkImmutability } from '../scripts/check-immutability.mjs';
+
+test('published version changes are blocked; a new version is allowed', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'imon-idl-git-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  git(['init', '-q']);
+  git(['config', 'user.name', 'test']); git(['config', 'user.email', 'test@example.invalid']);
+  const folder = path.join(root, 'packs/test/1.0.0');
+  await mkdir(folder, { recursive: true });
+  await writeFile(path.join(folder, 'manifest.json'), JSON.stringify({ status: 'published', visibility: 'public' }));
+  await writeFile(path.join(folder, 'file.css'), 'a{}');
+  git(['add', '.']); git(['commit', '-qm', 'initial']);
+  const base = git(['rev-parse', 'HEAD']);
+  await mkdir(path.join(root, 'packs/test/1.1.0'), { recursive: true });
+  await writeFile(path.join(root, 'packs/test/1.1.0/manifest.json'), '{}');
+  git(['add', '.']); git(['commit', '-qm', 'new version']);
+  const allowed = git(['rev-parse', 'HEAD']);
+  assert.equal(checkImmutability(base, allowed, root), 1);
+  await writeFile(path.join(folder, 'file.css'), 'b{}');
+  git(['add', '.']); git(['commit', '-qm', 'mutated']);
+  assert.throws(() => checkImmutability(base, git(['rev-parse', 'HEAD']), root), /immutable/);
+  assert.throws(() => checkImmutability('--help', allowed, root), /Full hexadecimal/);
+});

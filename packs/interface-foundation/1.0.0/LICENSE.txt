@@ -1,0 +1,14 @@
+LicenseRef-IMON-Proprietary
+Copyright (c) 2026 I’MON. All rights reserved.
+
+This original starter pack was prepared for the repository owner. The owner
+has authorized its publication and download through I’MON Design Library.
+The manifest redistribution flag records that publication approval; it is
+not a general license for third-party reuse or redistribution.
+
+Public access to this repository, preview or archive does not grant an
+open-source license. Third parties must obtain the owner's permission before
+copying, modifying, using commercially or redistributing this material.
+
+The pack contains no third-party fonts, images, code or runtime dependencies.
+The owner may use and adapt it in their own projects.

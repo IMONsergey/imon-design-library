@@ -1,0 +1,11 @@
+[Unit]
+Description=Check I’MON Design Library main for validated releases
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=2min
+AccuracySec=10s
+Unit=imon-design-library.service
+
+[Install]
+WantedBy=timers.target

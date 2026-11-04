@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Layout recipes · I’MON</title>
+  <link rel="stylesheet" href="../layout.css">
+  <style>
+    .imon-layout { margin: 0; background: var(--imon-layout-paper); }
+    .imon-layout .iml-preview { padding-top: 32px; padding-bottom: 32px; }
+    .imon-layout .iml-preview-header { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 42px; }
+    .imon-layout .iml-preview-header span { color: var(--imon-layout-muted); font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .imon-layout .iml-block { margin-top: 36px; padding-top: 28px; border-top: 1px solid var(--imon-layout-line); }
+    .imon-layout .iml-block-title { margin: 0 0 22px; font-size: 12px; font-weight: 550; }
+    .imon-layout .iml-editorial .iml-measure { margin: 0; color: var(--imon-layout-muted); }
+    .imon-layout .iml-cover { display: flex; height: 118px; align-items: flex-end; padding: 18px; background: #e6e7df; color: #363c31; font-size: 42px; line-height: 1; letter-spacing: -.05em; }
+    .imon-layout .iml-cover--dark { background: #343b32; color: #f5f4ef; }
+    .imon-layout .iml-cover--soft { background: #e4ded3; color: #52483e; }
+    .imon-layout .iml-preview .iml-card { border-top: 0; padding-top: 0; --imon-layout-gap: 12px; }
+    .imon-layout .iml-preview .iml-card p { font-size: 13px; }
+    .imon-layout .iml-preview .iml-sidebar { --imon-layout-gap: 16px; }
+    .imon-layout .iml-footer { margin: 28px 0 0; color: var(--imon-layout-muted); font-size: 11px; }
+    @media (max-width: 480px) {
+      .imon-layout .iml-preview-header { margin-bottom: 28px; flex-wrap: wrap; }
+      .imon-layout .iml-cover { height: 100px; }
+    }
+  </style>
+</head>
+<body class="imon-layout">
+  <main class="iml-container iml-preview">
+    <div class="iml-preview-header"><p class="iml-eyebrow">I’MON / starter 03</p><span>Три схемы. Одна логика.</span></div>
+
+    <section class="iml-editorial" aria-labelledby="iml-demo-title">
+      <div class="iml-stack"><p class="iml-eyebrow">01 / Редакционный блок</p><h1 class="iml-title" id="iml-demo-title">Место для главного.</h1></div>
+      <p class="iml-measure">Сетка задает порядок, но оставляет пространство. На большом экране две колонки, на телефоне спокойная последовательность.</p>
+    </section>
+
+    <section class="iml-block" aria-labelledby="iml-grid-title">
+      <h2 class="iml-block-title" id="iml-grid-title">02 / Сетка карточек</h2>
+      <div class="iml-cards">
+        <article class="iml-card iml-stack"><div class="iml-cover" aria-hidden="true">Aa</div><h3 class="iml-subtitle">Типографика</h3><p>Ясный порядок и подходящая длина строки.</p></article>
+        <article class="iml-card iml-stack"><div class="iml-cover iml-cover--dark" aria-hidden="true">01</div><h3 class="iml-subtitle">Пространство</h3><p>Отступы объясняют отношения между частями.</p></article>
+        <article class="iml-card iml-stack"><div class="iml-cover iml-cover--soft" aria-hidden="true">/</div><h3 class="iml-subtitle">Иерархия</h3><p>Главное выделяется без лишних украшений.</p></article>
+      </div>
+    </section>
+
+    <section class="iml-block" aria-labelledby="iml-description-heading">
+      <h2 class="iml-block-title" id="iml-description-heading">03 / Контекст и описание</h2>
+      <div class="iml-sidebar">
+        <dl class="iml-meta"><div><dt>Основа</dt><dd>CSS Grid</dd></div><div><dt>Адаптивность</dt><dd>От 320 px</dd></div></dl>
+        <div class="iml-stack iml-measure"><h3 class="iml-subtitle">Структура следует содержимому.</h3><p>Дополнительные сведения занимают боковую колонку. Основной текст сохраняет удобную ширину. На телефоне блоки идут в том же порядке, что и в исходной разметке.</p><p>Меняйте размеры и пропорции в своем проекте. Этот пак дает схемы, а не обязательную сетку для всей библиотеки.</p></div>
+      </div>
+    </section>
+    <p class="iml-footer">Оригинальные стартовые материалы I’MON. Только локальные HTML и CSS, без скриптов и внешних ресурсов.</p>
+  </main>
+</body>
+</html>

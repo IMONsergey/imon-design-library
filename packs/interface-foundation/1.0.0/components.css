@@ -1,0 +1,150 @@
+/* Import tokens.css first. This file never styles outside .imon-foundation. */
+.imon-foundation,
+.imon-foundation * {
+  box-sizing: border-box;
+}
+
+.imon-foundation .imf-button {
+  display: inline-flex;
+  min-height: var(--imon-foundation-control-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--imon-foundation-space-2);
+  padding: 0.625rem 1.125rem;
+  border: 1px solid transparent;
+  border-radius: var(--imon-foundation-radius-sm);
+  background: var(--imon-foundation-accent);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 550;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.imon-foundation .imf-button--secondary {
+  border-color: var(--imon-foundation-line);
+  background: var(--imon-foundation-surface);
+  color: var(--imon-foundation-text);
+}
+
+.imon-foundation .imf-button--quiet {
+  background: transparent;
+  color: var(--imon-foundation-text);
+}
+
+.imon-foundation .imf-button:disabled {
+  border-color: var(--imon-foundation-line);
+  background: #e7e8e2;
+  color: #62665e;
+  cursor: not-allowed;
+}
+
+.imon-foundation .imf-button svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+}
+
+.imon-foundation .imf-field {
+  display: grid;
+  gap: var(--imon-foundation-space-2);
+  min-width: 0;
+}
+
+.imon-foundation .imf-label {
+  font-weight: 550;
+}
+
+.imon-foundation .imf-input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--imon-foundation-control-height);
+  border: 1px solid #858d80;
+  border-radius: var(--imon-foundation-radius-sm);
+  background: var(--imon-foundation-surface);
+  color: var(--imon-foundation-text);
+  padding: 0.625rem 0.875rem;
+  font: inherit;
+  line-height: 1.5;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.imon-foundation .imf-input::placeholder {
+  color: var(--imon-foundation-muted);
+  opacity: 1;
+}
+
+.imon-foundation .imf-input[aria-invalid="true"] {
+  border-color: var(--imon-foundation-error);
+  box-shadow: inset 0 0 0 1px var(--imon-foundation-error);
+}
+
+.imon-foundation .imf-hint,
+.imon-foundation .imf-error {
+  margin: 0;
+  font-size: var(--imon-foundation-text-sm);
+  line-height: 1.5;
+}
+
+.imon-foundation .imf-hint {
+  color: var(--imon-foundation-muted);
+}
+
+.imon-foundation .imf-error {
+  color: var(--imon-foundation-error);
+}
+
+.imon-foundation .imf-check {
+  display: inline-flex;
+  min-height: var(--imon-foundation-control-height);
+  align-items: center;
+  gap: var(--imon-foundation-space-3);
+  cursor: pointer;
+}
+
+.imon-foundation .imf-check input {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: var(--imon-foundation-accent);
+}
+
+.imon-foundation .imf-button:focus-visible,
+.imon-foundation .imf-input:focus-visible,
+.imon-foundation .imf-check input:focus-visible {
+  outline: 2px solid var(--imon-foundation-focus);
+  outline-offset: 3px;
+}
+
+@supports not selector(:focus-visible) {
+  .imon-foundation .imf-button:focus,
+  .imon-foundation .imf-input:focus,
+  .imon-foundation .imf-check input:focus {
+    outline: 2px solid var(--imon-foundation-focus);
+    outline-offset: 3px;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .imon-foundation .imf-button:not(:disabled):hover {
+    background: var(--imon-foundation-accent-hover);
+  }
+  .imon-foundation .imf-button--secondary:not(:disabled):hover,
+  .imon-foundation .imf-button--quiet:not(:disabled):hover {
+    border-color: #858d80;
+    background: #ebede7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .imon-foundation .imf-button {
+    transition: none;
+  }
+}

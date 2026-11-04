@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://css.imon.world/api/schema.json",
+  "title": "I’MON Design Library pack manifest v1",
+  "description": "One isolated, immutable version of a design asset pack. Node validation additionally verifies file ownership, sizes, local resource references, license files and secret patterns.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "version", "title", "summary", "category", "status", "visibility", "tags", "license", "source", "scripts", "files", "assets"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "$ref": "#/$defs/slug" },
+    "version": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})\\.(0|[1-9][0-9]{0,8})$" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "category": { "enum": ["design-system", "components", "motion", "icons", "typography", "guidelines", "templates"] },
+    "status": { "enum": ["draft", "published"] },
+    "visibility": { "enum": ["public", "private"] },
+    "tags": { "type": "array", "maxItems": 20, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 48 } },
+    "license": {
+      "type": "object", "additionalProperties": false, "required": ["id", "file", "redistribution"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 120, "pattern": "^[A-Za-z0-9][A-Za-z0-9.+-]*$" },
+        "file": { "allOf": [{ "$ref": "#/$defs/path" }, { "pattern": "\\.(md|txt)$" }] },
+        "redistribution": { "type": "boolean", "description": "Explicit permission to publish these files. This is not a grant of reuse rights; license.id and the license file define those rights." }
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["type", "author"],
+      "properties": {
+        "type": { "enum": ["original", "third-party"] },
+        "author": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048 }
+      },
+      "allOf": [{ "if": { "properties": { "type": { "const": "third-party" } } }, "then": { "required": ["url"] } }]
+    },
+    "review": {
+      "type": "object", "additionalProperties": false, "required": ["by", "date"],
+      "properties": {
+        "by": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "date": { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+      }
+    },
+    "preview": { "allOf": [{ "$ref": "#/$defs/path" }, { "pattern": "\\.html?$" }] },
+    "scripts": { "type": "boolean", "description": "Whether the reviewed preview needs scripts. Never permits same-origin, forms, popups, downloads or top navigation." },
+    "files": { "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": { "$ref": "#/$defs/path" } },
+    "assets": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/asset" } }
+  },
+  "allOf": [{
+    "if": { "properties": { "status": { "const": "published" } } },
+    "then": {
+      "required": ["preview", "review"],
+      "properties": {
+        "assets": { "minItems": 1 },
+        "license": { "properties": { "redistribution": { "const": true }, "id": { "not": { "const": "UNLICENSED" } } } }
+      }
+    }
+  }],
+  "$defs": {
+    "slug": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "path": { "type": "string", "minLength": 1, "maxLength": 240, "pattern": "^[A-Za-z0-9_-][A-Za-z0-9_.-]*(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$", "description": "Portable relative path within this pack. No dotfiles, parent traversal, absolute paths, URL encoding, credential names, symlinks or executable files. Runtime validator checks extra path and filesystem constraints." },
+    "asset": {
+      "type": "object", "additionalProperties": false, "required": ["id", "title", "type", "path", "description", "usage"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "type": { "enum": ["component", "stylesheet", "script", "tokens", "documentation", "image", "font", "template"] },
+        "path": { "$ref": "#/$defs/path" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "usage": { "type": "string", "minLength": 1, "maxLength": 10000 }
+      }
+    }
+  }
+}

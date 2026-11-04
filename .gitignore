@@ -1,0 +1,16 @@
+node_modules/
+dist/
+inbox/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.log
+.DS_Store
+coverage/
+test-results/
+playwright-report/
+*.zip
+.cache/

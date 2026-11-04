@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Motion essentials · I’MON</title>
+  <link rel="stylesheet" href="../motion.css">
+  <style>
+    .imon-motion { margin: 0; background: var(--imon-motion-paper); }
+    .imon-motion .imm-preview { max-width: 860px; margin: 0 auto; padding: 36px; }
+    .imon-motion .imm-eyebrow { margin: 0 0 16px; color: var(--imon-motion-muted); font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .imon-motion .imm-title { margin: 0; font-size: clamp(28px, 5vw, 44px); line-height: 1.12; font-weight: 500; letter-spacing: -.045em; }
+    .imon-motion .imm-intro { max-width: 570px; margin: 18px 0 34px; color: var(--imon-motion-muted); }
+    .imon-motion .imm-specimen { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 24px; border-top: 1px solid var(--imon-motion-line); padding: 28px 0; }
+    .imon-motion .imm-specimen h2 { margin: 0; font-size: 13px; font-weight: 550; }
+    .imon-motion .imm-meta { display: block; margin-top: 5px; color: var(--imon-motion-muted); font: 11px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .imon-motion .imm-stage { display: flex; min-height: 70px; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .imon-motion .imm-specimen .imm-details { width: 100%; border-top: 0; }
+    .imon-motion .imm-sample { width: 100%; padding: 20px; background: #ebece5; border: 1px solid var(--imon-motion-line); border-radius: 4px; }
+    .imon-motion .imm-sample p { margin: 0; }
+    .imon-motion .imm-small { margin-top: 8px; color: var(--imon-motion-muted); font-size: 12px; }
+    .imon-motion .imm-note { padding-top: 22px; border-top: 1px solid var(--imon-motion-line); color: var(--imon-motion-muted); font-size: 12px; }
+    @media (max-width: 580px) {
+      .imon-motion .imm-preview { padding: 24px 20px; }
+      .imon-motion .imm-specimen { grid-template-columns: 1fr; gap: 16px; }
+    }
+  </style>
+</head>
+<body class="imon-motion">
+  <main class="imm-preview">
+    <p class="imm-eyebrow">I’MON / starter 02 / CSS only</p>
+    <h1 class="imm-title">Движение по делу.</h1>
+    <p class="imm-intro">Короткая реакция на действие, аккуратный переход, понятный фокус. Без бесконечных анимаций и задержек перед контентом.</p>
+
+    <section class="imm-specimen" aria-labelledby="imm-press-heading">
+      <div><h2 id="imm-press-heading">01 / Нажатие</h2><span class="imm-meta">140 ms · 1 px</span></div>
+      <div class="imm-stage"><button class="imm-button" type="button">Наведите и нажмите</button></div>
+    </section>
+
+    <section class="imm-specimen" aria-labelledby="imm-link-heading">
+      <div><h2 id="imm-link-heading">02 / Направление</h2><span class="imm-meta">220 ms · 3 px</span></div>
+      <div class="imm-stage"><a class="imm-link" href="#imm-preview-notes"><span>К заметкам о паке</span><svg class="imm-link__arrow" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12M11 5l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a></div>
+    </section>
+
+    <section class="imm-specimen" aria-labelledby="imm-details-heading">
+      <div><h2 id="imm-details-heading">03 / Раскрытие</h2><span class="imm-meta">180 ms · opacity</span></div>
+      <details class="imm-details"><summary>Откройте описание</summary><p class="imm-details__content">Это нативный details. Открывается мышью, касанием или клавишами Enter и Space. Смысл и управление не зависят от анимации.</p></details>
+    </section>
+
+    <section class="imm-specimen" aria-labelledby="imm-enter-heading">
+      <div><h2 id="imm-enter-heading">04 / Появление</h2><span class="imm-meta">420 ms · 8 px</span></div>
+      <div class="imm-sample imm-enter"><p>Контент уже здесь.</p><p class="imm-small">Одно появление при открытии превью. При reduced motion движение полностью отключено.</p></div>
+    </section>
+
+    <p class="imm-note" id="imm-preview-notes">Оригинальные стартовые примеры I’MON. Движение можно проверить мышью и клавиатурой; форма, сеть и JavaScript не используются.</p>
+  </main>
+</body>
+</html>
