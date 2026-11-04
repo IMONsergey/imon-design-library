@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "visual-weblg",
+  "version": "1.0.0",
+  "title": "Visual WebLG",
+  "summary": "Интерактивный бриллиант: 10 огранок, вращение мышью и плавная автопрокрутка.",
+  "category": "components",
+  "status": "published",
+  "visibility": "public",
+  "tags": [
+    "webgl",
+    "бриллиант",
+    "интерактив",
+    "canvas",
+    "tilda"
+  ],
+  "license": {
+    "id": "LicenseRef-IMON-Proprietary",
+    "file": "LICENSE.txt",
+    "redistribution": true
+  },
+  "source": {
+    "type": "original",
+    "author": "Сергей Отческов / I’MON"
+  },
+  "review": {
+    "by": "ChatGPT: проверка импорта и изоляции",
+    "date": "2026-11-04"
+  },
+  "preview": "preview/index.html",
+  "scripts": true,
+  "files": [
+    "diamond-cut-study-restored.html",
+    "preview/index.html",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "assets": [
+    {
+      "id": "visual-weblg",
+      "title": "Visual WebLG",
+      "type": "component",
+      "path": "diamond-cut-study-restored.html",
+      "description": "Самодостаточный HTML-ассет на WebGL 1: 10 форм бриллианта, ракурсы 3/4 и сверху, вращение с инерцией, цветовая дисперсия и мягкий автоматический поворот.",
+      "usage": "Вставь содержимое diamond-cut-study-restored.html целиком в HTML-блок. CSS, JavaScript и SVG-иконки уже внутри, внешние библиотеки не нужны. Один экземпляр #diamond-cuts-v5 на документ. Для изоляции перенеси всю папку в проект и открывай preview/index.html в iframe с sandbox=\"allow-scripts\". Нужен работающий WebGL. Автоповорот начинается после 2 секунд простоя и отключается при prefers-reduced-motion: reduce."
+    }
+  ]
+}

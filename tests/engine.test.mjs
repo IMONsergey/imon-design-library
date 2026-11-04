@@ -225,6 +225,90 @@ test('scripts require an explicit reviewed manifest flag; the build never execut
   assert.throws(() => loadLibrary(f.root), /scripts=true/);
 });
 
+test('reviewed inline script raw text is not parsed as HTML or executed', (t) => {
+  const f = fixture(t);
+  f.manifest.scripts = true; f.save();
+  const html = `<main><script>
+const base = [1, 2];
+for (let i = 0; i<base.length; i++) { /* comparison, not a base tag */ }
+const example = '<iframe src="https://example.com/example">';
+const attributes = ' src="https://example.com/file" onclick="example()"';
+const notAnEndTag = '</scriptx><base>';
+throw new Error('The validator must not execute pack code');
+</script><p>Ordinary content after the script.</p></main>`;
+  fs.writeFileSync(path.join(f.directory, 'preview/index.html'), html);
+  assert.doesNotThrow(() => loadLibrary(f.root));
+  f.manifest.scripts = false; f.save();
+  assert.throws(() => loadLibrary(f.root), /scripts=true/);
+});
+
+test('real forbidden markup after script raw text is still rejected', (t) => {
+  const f = fixture(t);
+  f.manifest.scripts = true; f.save();
+  for (const forbidden of ['<iframe src="../README.md"></iframe>', '<base href="../">', '<form></form>', '<meta http-equiv="refresh" content="0;https://example.com">']) {
+    for (const script of ['<script>const base=[]; for(let i=0;i<base.length;i++) {}</script>', '<script>const commentMarker="<!--";</script>']) {
+      fs.writeFileSync(path.join(f.directory, 'preview/index.html'), `${script}${forbidden}<!-- trailing comment -->`);
+      assert.throws(() => loadLibrary(f.root), /not allowed/, forbidden);
+    }
+  }
+});
+
+test('an HTML script end tag closes raw text even inside a JavaScript string', (t) => {
+  const f = fixture(t);
+  f.manifest.scripts = true; f.save();
+  for (const close of ['</script>', '</ScRiPt >', '</script/>', '</script ignored="attribute">']) {
+    for (const forbidden of ['<iframe src="../README.md"></iframe>', '<base href="../">']) {
+      fs.writeFileSync(path.join(f.directory, 'preview/index.html'), `<script>const value = "${close}${forbidden}";</script>`);
+      assert.throws(() => loadLibrary(f.root), /not allowed/, `${close} ${forbidden}`);
+    }
+  }
+});
+
+test('script start-tag attributes remain subject to the local resource allowlist', (t) => {
+  const f = fixture(t);
+  f.manifest.scripts = true; f.save();
+  addFile(f, 'component.js', 'throw new Error("not executed during validation");');
+  fs.writeFileSync(path.join(f.directory, 'preview/index.html'), '<script data-note="a > b" src="../component.js"></script>');
+  assert.doesNotThrow(() => loadLibrary(f.root));
+  for (const src of ['https://example.com/component.js', '//example.com/component.js', 'https&#58;//example.com/component.js', '../missing.js']) {
+    fs.writeFileSync(path.join(f.directory, 'preview/index.html'), `<script data-note="a > b" src="${src}">const base=[]; for(let i=0;i<base.length;i++) {}</script>`);
+    assert.throws(() => loadLibrary(f.root), /external|unlisted/, src);
+  }
+});
+
+test('fake script openers in attributes or comments cannot hide forbidden HTML', (t) => {
+  const f = fixture(t);
+  f.manifest.scripts = true; f.save();
+  for (const prefix of ['<div data-example="<script>"></div>', '<!-- <script> -->', '<!-- <script> --!>', '<!-->', '<!--->']) {
+    fs.writeFileSync(path.join(f.directory, 'preview/index.html'), `${prefix}<iframe src="../README.md"></iframe></script>`);
+    assert.throws(() => loadLibrary(f.root), /not allowed/, prefix);
+  }
+});
+
+test('empty and short HTML comments end before following markup and scripts', (t) => {
+  const f = fixture(t);
+  for (const comment of ['<!---->', '<!--x-->', '<!--xy-->', '<!-->', '<!--->']) {
+    const filename = path.join(f.directory, 'preview/index.html');
+    fs.writeFileSync(filename, `${comment}<p>Ordinary content.</p>`);
+    assert.doesNotThrow(() => loadLibrary(f.root), comment);
+    fs.writeFileSync(filename, `${comment}<script>const base=[]; for(let i=0;i<base.length;i++) {}</script>`);
+    assert.throws(() => loadLibrary(f.root), /scripts=true/, comment);
+    fs.writeFileSync(filename, `${comment}<iframe src="../README.md"></iframe>`);
+    assert.throws(() => loadLibrary(f.root), /not allowed/, comment);
+  }
+});
+
+test('raw-text masking does not hide CSS resource checks or SVG foreign content', (t) => {
+  const f = fixture(t);
+  f.manifest.scripts = true; f.save();
+  fs.writeFileSync(path.join(f.directory, 'preview/index.html'), '<style>.example::before{content:"<script>"}.example{background:url(https://example.com/pixel.png)}</style></script>');
+  assert.throws(() => loadLibrary(f.root), /external/);
+  fs.writeFileSync(path.join(f.directory, 'preview/index.html'), '<svg><script><iframe src="../README.md"></iframe></script></svg>');
+  assert.throws(() => loadLibrary(f.root), /not allowed/);
+  fs.writeFileSync(path.join(f.directory, 'preview/index.html'), '<svg><path d="M0 0h1v1z"/></svg><script>const base=[]; for(let i=0;i<base.length;i++) {}</script>');
+  assert.doesNotThrow(() => loadLibrary(f.root));
+});
+
 test('SVG active content and entities are rejected', (t) => {
   const f = fixture(t);
   addFile(f, 'icon.svg', '<svg><path d="M0 0h10v10z"/></svg>');

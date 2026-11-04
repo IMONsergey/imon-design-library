@@ -1,0 +1,523 @@
+<main>
+<div id="diamond-cuts-v5" class="dc5">
+<style>
+#diamond-cuts-v5{height:min(730px,83vh);min-height:520px;width:100%;display:flex;flex-direction:column;overflow:hidden;position:relative;border-radius:19px;border:1px solid #edf0f3;background:#fff;isolation:isolate;font-family:system-ui,-apple-system,sans-serif;-webkit-user-select:none;user-select:none}
+#diamond-cuts-v5 .dc5-stage{position:relative;flex:1;min-height:0;background:radial-gradient(ellipse at 50% 45%,#fff 45%,#fbfcfe 100%)}
+#diamond-cuts-v5 canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+#diamond-cuts-v5 canvas:active{cursor:grabbing}
+#diamond-cuts-v5 .dc5-head{position:absolute;top:20px;left:22px;right:22px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;pointer-events:none}
+#diamond-cuts-v5 .dc5-kicker{font:600 10px/1.4 ui-monospace,SFMono-Regular,monospace;letter-spacing:.13em;color:#8293a3}
+#diamond-cuts-v5 .dc5-name{margin-top:5px;font-size:13px;color:#8191a0}
+#diamond-cuts-v5 .dc5-views{display:flex;gap:3px;padding:3px;border:1px solid #eaf0f5;background:rgba(255,255,255,.82);backdrop-filter:blur(12px);border-radius:9px;pointer-events:auto}
+#diamond-cuts-v5 .dc5-view{appearance:none;border:0;border-radius:6px;background:transparent;color:#9caab7;padding:8px 11px;font:500 11px system-ui;cursor:pointer;transition:background .2s,color .2s}
+#diamond-cuts-v5 .dc5-view.active{color:#415c74;background:#eef4f8}
+#diamond-cuts-v5 .dc5-view:focus-visible,#diamond-cuts-v5 .dc5-option:focus-visible{outline:2px solid #76a2c6;outline-offset:-2px}
+#diamond-cuts-v5 .dc5-hint{position:absolute;left:50%;bottom:15px;transform:translateX(-50%);white-space:nowrap;color:#a3afba;font-size:11px;pointer-events:none}
+#diamond-cuts-v5 .dc5-picker{height:104px;flex:none;display:flex;align-items:center;gap:3px;padding:10px 13px;box-sizing:border-box;overflow-x:auto;border-top:1px solid #edf1f4;background:#fff;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+#diamond-cuts-v5 .dc5-picker::-webkit-scrollbar{display:none}
+#diamond-cuts-v5 .dc5-option{flex:1 0 70px;min-width:70px;max-width:112px;height:77px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;appearance:none;border:1px solid transparent;border-radius:10px;background:transparent;color:#9ba9b6;font:500 10px system-ui;cursor:pointer;transition:background .22s,color .22s,border-color .22s}
+#diamond-cuts-v5 .dc5-option svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linejoin:round;stroke-linecap:round}
+#diamond-cuts-v5 .dc5-option:hover{background:#f5f8fa;color:#526d85}
+#diamond-cuts-v5 .dc5-option.active{background:#edf4fa;border-color:#e0ebf4;color:#37546c}
+#diamond-cuts-v5 .dc5-error{display:none;position:absolute;inset:0;align-items:center;justify-content:center;background:white;color:#8d99a6;font-size:13px}
+@media(max-width:540px){#diamond-cuts-v5{height:590px;min-height:520px;border-radius:15px}#diamond-cuts-v5 .dc5-head{top:16px;left:16px;right:16px}#diamond-cuts-v5 .dc5-view{padding:7px 9px}#diamond-cuts-v5 .dc5-picker{height:97px;padding:9px 10px}#diamond-cuts-v5 .dc5-option{height:72px}}
+</style>
+<div class="dc5-stage">
+<canvas aria-label="Интерактивный бриллиант с выбором формы и переключением камеры" width="806" height="435"></canvas>
+<div class="dc5-head">
+  <div>
+    <div class="dc5-kicker">DIAMOND / CUT STUDY</div>
+    <div class="dc5-name" id="dc5-name">Круглая огранка</div>
+  </div>
+  <div class="dc5-views" role="group" aria-label="Ракурс">
+    <button class="dc5-view active" data-view="three" aria-pressed="true">3/4</button>
+    <button class="dc5-view" data-view="top" aria-pressed="false">Сверху</button>
+    <button class="dc5-view" data-view="reset" aria-label="Сбросить положение">↺</button>
+  </div>
+</div>
+<div class="dc5-hint">Потяни, чтобы вращать</div>
+</div>
+<div class="dc5-picker" role="group" aria-label="Формы огранки"><button type="button" class="dc5-option active" data-cut="round" aria-pressed="true"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"></circle><path d="m4 16 12-12 12 12-12 12Z M4 16h24 M16 4v24"></path></svg><span>Круглая</span></button><button type="button" class="dc5-option" data-cut="oval" aria-pressed="false"><svg viewBox="0 0 32 32" aria-hidden="true"><ellipse cx="16" cy="16" rx="13" ry="9"></ellipse><path d="m3 16 13-7 13 7-13 7Z M16 7v18"></path></svg><span>Овал</span></button><button type="button" class="dc5-option" data-cut="pear" aria-pressed="false"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2C12 10 5 13 5 20a11 11 0 0 0 22 0c0-7-7-10-11-18Z M16 2v29 M5 20l11-8 11 8"></path></svg><span>Груша</span></button><button type="button" class="dc5-option" data-cut="marquise" aria-pressed="false"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M2 16Q16 1 30 16 16 31 2 16Z M2 16h28 M16 5v22"></path></svg><span>Маркиз</span></button><button type="button" class="dc5-option" data-cut="cushion" aria-pressed="false"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="4" y="4" width="24" height="24" rx="7"></rect><path d="M11 4 4 11v10l7 7h10l7-7V11l-7-7 M4 11l7-7 M28 11l-7-7"></path></svg><span>Кушон</span></button><button type="button" class="dc5-option" data-cut="princess" aria-pressed="false"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="1"></rect><path d="M3 3 16 16 29 3 M3 29 16 16 29 29 M3 3l26 26 M29 3 3 29"></path></svg><span>Принцесса</span></button><button type="button" class="dc5-option" data-cut="emerald" aria-pressed="false"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="m9 3 14 0 7 7v12l-7 7H9l-7-7V10Z M11 8h10l4 4v8l-4 4H11l-4-4v-8Z"></path></svg><span>Изумруд</span></button><button type="button" class="dc5-option" data-cut="radiant" aria-pressed="false"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="m8 3 16 0 6 6v14l-6 6H8l-6-6V9Z M2 9l14 7 14-7 M2 23l14-7 14 7 M8 3l8 13 8-13"></path></svg><span>Радиант</span></button><button type="button" class="dc5-option" data-cut="asscher" aria-pressed="false"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="m10 2 12 0 8 8v12l-8 8H10l-8-8V10Z M11 7h10l4 4v10l-4 4H11l-4-4V11Z M13 12h6l1 1v6l-1 1h-6l-1-1v-6Z"></path></svg><span>Ашер</span></button><button type="button" class="dc5-option" data-cut="trillion" aria-pressed="false"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 2 14 26H2Z M16 2v18 M2 28l14-8 14 8 M6 22h20"></path></svg><span>Триллион</span></button></div>
+<div class="dc5-error">WebGL недоступен</div>
+<script>
+(()=>{
+const root=document.getElementById("diamond-cuts-v5");
+if(!root||root.dataset.ready)return;
+root.dataset.ready="1";
+const stage=root.querySelector(".dc5-stage");
+const canvas=root.querySelector("canvas");
+const picker=root.querySelector(".dc5-picker");
+const label=root.querySelector("#dc5-name");
+const gl=canvas.getContext("webgl",{alpha:false,antialias:true,powerPreference:"high-performance"});
+if(!gl){root.querySelector(".dc5-error").style.display="flex";return}
+
+const CUTS=[
+["round","Круглая","Круглая бриллиантовая",'<circle cx="16" cy="16" r="12"/><path d="m4 16 12-12 12 12-12 12Z M4 16h24 M16 4v24"/>'],
+["oval","Овал","Овальная бриллиантовая",'<ellipse cx="16" cy="16" rx="13" ry="9"/><path d="m3 16 13-7 13 7-13 7Z M16 7v18"/>'],
+["pear","Груша","Грушевидная бриллиантовая",'<path d="M16 2C12 10 5 13 5 20a11 11 0 0 0 22 0c0-7-7-10-11-18Z M16 2v29 M5 20l11-8 11 8"/>'],
+["marquise","Маркиз","Маркиз",'<path d="M2 16Q16 1 30 16 16 31 2 16Z M2 16h28 M16 5v22"/>'],
+["cushion","Кушон","Кушон",'<rect x="4" y="4" width="24" height="24" rx="7"/><path d="M11 4 4 11v10l7 7h10l7-7V11l-7-7 M4 11l7-7 M28 11l-7-7"/>'],
+["princess","Принцесса","Принцесса",'<rect x="3" y="3" width="26" height="26" rx="1"/><path d="M3 3 16 16 29 3 M3 29 16 16 29 29 M3 3l26 26 M29 3 3 29"/>'],
+["emerald","Изумруд","Изумрудная ступенчатая",'<path d="m9 3 14 0 7 7v12l-7 7H9l-7-7V10Z M11 8h10l4 4v8l-4 4H11l-4-4v-8Z"/>'],
+["radiant","Радиант","Радиант",'<path d="m8 3 16 0 6 6v14l-6 6H8l-6-6V9Z M2 9l14 7 14-7 M2 23l14-7 14 7 M8 3l8 13 8-13"/>'],
+["asscher","Ашер","Ашер, ступенчатая",'<path d="m10 2 12 0 8 8v12l-8 8H10l-8-8V10Z M11 7h10l4 4v10l-4 4H11l-4-4V11Z M13 12h6l1 1v6l-1 1h-6l-1-1v-6Z"/>'],
+["trillion","Триллион","Триллион",'<path d="m16 2 14 26H2Z M16 2v18 M2 28l14-8 14 8 M6 22h20"/>']
+];
+for(const cut of CUTS){
+if(picker.querySelector('[data-cut="'+cut[0]+'"]'))continue;
+const b=document.createElement("button");
+b.type="button";b.className="dc5-option"+(cut[0]==="round"?" active":"");
+b.dataset.cut=cut[0];
+b.setAttribute("aria-pressed",cut[0]==="round"?"true":"false");
+b.innerHTML='<svg viewBox="0 0 32 32" aria-hidden="true">'+cut[3]+'</svg><span>'+cut[1]+'</span>';
+picker.appendChild(b);
+}
+
+const VS="attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
+const BG=`
+precision highp float;
+uniform vec2 res;
+void main(){
+vec2 uv=(gl_FragCoord.xy-res*.5)/min(res.x,res.y);
+float sh=exp(-pow(uv.x/.43,2.)*2.1-pow((uv.y+.39)/.075,2.)*1.65);
+gl_FragColor=vec4(vec3(1.)-sh*vec3(.105,.095,.085),1.);
+}`;
+const FS=`
+precision highp float;
+uniform vec2 res;
+uniform mat3 rot;
+uniform vec4 planes[49];
+uniform int count;
+uniform float radius;
+uniform float alpha;
+
+vec3 loc(vec3 v){return vec3(dot(v,rot[0]),dot(v,rot[1]),dot(v,rot[2]));}
+float panel(vec2 p,vec2 c,vec2 s,float f){vec2 d=abs(p-c)-s;return 1.-smoothstep(0.,f,max(d.x,d.y));}
+
+vec3 env(vec3 ray){
+vec3 d=normalize(ray);
+float a=atan(d.x,d.z),e=asin(clamp(d.y,-1.,1.));
+vec2 q=vec2(a,e);
+// One fixed studio rig. Its highlights respond to the stone, not to a timer.
+float key=panel(q,vec2(-.72,.3),vec2(.25,.77),.13);
+float strip=panel(q,vec2(.48,.45),vec2(.12,.87),.12);
+float rim=panel(q,vec2(2.08,.15),vec2(.3,.87),.14);
+float overhead=panel(q,vec2(-1.5,1.07),vec2(.5,.4),.15);
+float flag=panel(q,vec2(.03,-.12),vec2(.15,1.03),.13);
+float side=panel(q,vec2(1.28,-.15),vec2(.20,.8),.16);
+float v=.89+.12*d.y+.28*key+.30*strip+.19*rim+.15*overhead-.40*flag-.18*side;
+v=clamp(v,.58,1.35);
+return clamp(vec3(v*.965+.012,v*.995+.01,v*1.035+.016),0.,1.3);
+}
+
+// Bright cores of the SAME white studio panels. Splitting their outgoing
+// directions produces colour where the diamond bends the light.
+float studioSource(vec3 ray,vec3 surfacePoint){
+// Nearby softboxes have parallax, so their reflections travel across a facet
+// instead of colouring the entire facet like a flat decal.
+vec3 d=normalize(ray+.26*surfacePoint);
+vec2 q=vec2(atan(d.x,d.z),asin(clamp(d.y,-1.,1.)));
+float key=panel(q,vec2(-.72,.3),vec2(.085,.66),.055);
+float strip=panel(q,vec2(.48,.45),vec2(.038,.80),.045);
+float rim=panel(q,vec2(2.08,.15),vec2(.095,.68),.055);
+float back=panel(q,vec2(-2.30,.52),vec2(.045,.50),.055);
+float side=panel(q,vec2(1.32,-.15),vec2(.042,.60),.050);
+return .85*key+1.25*strip+.68*rim+.70*back+.76*side;
+}
+
+bool enterGem(vec3 o,vec3 d,out float tn,out float tf,out vec3 normal){
+float nearT=-10000.,farT=10000.;vec3 nn=vec3(0.,0.,1.);
+for(int i=0;i<49;i++){
+if(i>=count)break;
+vec4 p=planes[i];float den=dot(p.xyz,d),distance=p.w-dot(p.xyz,o);
+if(abs(den)<.00001){if(distance<-.00001)return false;}
+else{float t=distance/den;if(den<0.){if(t>nearT){nearT=t;nn=p.xyz;}}else farT=min(farT,t);}
+}
+tn=nearT;tf=farT;normal=nn;
+return nearT<=farT&&farT>0.&&nearT>0.;
+}
+
+bool leaveGem(vec3 o,vec3 d,out float dist,out vec3 normal){
+float nearest=10000.;vec3 nn=vec3(0.,1.,0.);
+for(int i=0;i<49;i++){
+if(i>=count)break;
+vec4 p=planes[i];float den=dot(p.xyz,d);
+if(den>.00001){float t=(p.w-dot(p.xyz,o))/den;if(t>.0001&&t<nearest){nearest=t;nn=p.xyz;}}
+}
+dist=nearest;normal=nn;return nearest<9999.;
+}
+
+// Exact dielectric Fresnel: transmission smoothly vanishes at the critical
+// angle, rather than snapping from a coloured exit to total reflection.
+float exitLight(vec3 inside,vec3 outward,float ior,out vec3 direction){
+direction=vec3(0.);
+float cosI=clamp(dot(inside,outward),0.,1.);
+float sinT2=ior*ior*max(0.,1.-cosI*cosI);
+if(sinT2>=1.)return 0.;
+float cosT=sqrt(max(0.,1.-sinT2));
+float rs=(ior*cosI-cosT)/max(.0001,ior*cosI+cosT);
+float rp=(cosI-ior*cosT)/max(.0001,cosI+ior*cosT);
+direction=refract(inside,-outward,ior);
+if(dot(direction,direction)<.0001)return 0.;
+return clamp(1.-.5*(rs*rs+rp*rp),0.,1.);
+}
+
+vec3 transmission(vec3 entry,vec3 incident,vec3 normal){
+// All wavelengths follow the SAME internal facet sequence. Splitting only
+// the outgoing directions gives genuine optical fire without RGB path jumps.
+vec3 ray=refract(incident,normal,1./2.423);
+if(dot(ray,ray)<.0001)return env(rot*reflect(incident,normal));
+vec3 pos=entry+ray*.0018;
+vec3 radiance=vec3(0.),remaining=vec3(1.);
+for(int bounce=0;bounce<3;bounce++){
+float dist;vec3 exitNormal;
+if(!leaveGem(pos,ray,dist,exitNormal))break;
+vec3 hit=pos+ray*dist;
+vec3 outR,outG,outB;
+float tR=exitLight(ray,exitNormal,2.391,outR);
+float tG=exitLight(ray,exitNormal,2.423,outG);
+float tB=exitLight(ray,exitNormal,2.479,outB);
+vec3 direct=vec3(0.);
+vec3 point=rot*hit;
+if(tR>.0001){vec3 d=rot*outR;direct.r=tR*(env(d).r+.96*studioSource(d,point));}
+if(tG>.0001){vec3 d=rot*outG;direct.g=tG*(env(d).g+.96*studioSource(d,point));}
+if(tB>.0001){vec3 d=rot*outB;direct.b=tB*(env(d).b+.96*studioSource(d,point));}
+radiance+=remaining*direct;
+remaining*=vec3(1.-tR,1.-tG,1.-tB);
+vec3 reflected=normalize(reflect(ray,exitNormal));
+if(max(remaining.r,max(remaining.g,remaining.b))<.035)
+return radiance+remaining*env(rot*reflected)*.91;
+ray=reflected;pos=hit+ray*.0018;
+}
+return radiance+remaining*env(rot*ray)*.91;
+}
+
+void main(){
+vec2 uv=(gl_FragCoord.xy-res*.5)/min(res.x,res.y);
+
+// Orthographic camera: the apparent size does not depend on rotation.
+float scale=res.x<res.y?2.75:2.50;
+vec3 camera=vec3(uv*scale,4.1);
+vec3 origin=loc(camera-vec3(0.,.105,0.));
+vec3 ray=normalize(loc(vec3(0.,0.,-1.)));
+
+vec3 oc=origin-vec3(0.,-.2,0.);
+float b=dot(oc,ray);
+if(b*b-(dot(oc,oc)-radius*radius)<0.){gl_FragColor=vec4(0.);return;}
+float tn,tf;vec3 n;
+if(!enterGem(origin,ray,tn,tf,n)){gl_FragColor=vec4(0.);return;}
+vec3 hit=origin+ray*tn;
+vec3 tr=transmission(hit,ray,n);
+// Increase the saturation of genuine wavelength separation, not a painted
+// texture. Neutral rays stay neutral; only dispersed light gains colour.
+float trLum=dot(tr,vec3(.333333));
+tr=clamp(vec3(trLum)+(tr-vec3(trLum))*2.2,0.,1.4);
+vec3 reflected=normalize(rot*reflect(ray,n));
+float incidence=clamp(-dot(ray,n),0.,1.);
+float fresnel=.172+.828*pow(1.-incidence,5.);
+vec3 col=mix(tr,env(reflected),max(.23,fresnel));
+vec3 key=normalize(vec3(-.49,.68,.56));
+vec3 side=normalize(vec3(.75,.46,.47));
+float glint=pow(max(0.,dot(reflected,key)),108.);
+col+=vec3(.96,.985,1.)*glint*.73;
+col+=vec3(.79,.87,1.)*pow(max(0.,dot(reflected,side)),100.)*.36;
+col=mix(vec3(.985,.993,1.),col,.87);
+col=pow(clamp(col,0.,1.),vec3(.73));
+col+=pow(1.-incidence,3.)*vec3(.008,.015,.025);
+float edge=smoothstep(.003,.067,tf-tn);
+gl_FragColor=vec4(clamp(col,0.,1.),alpha*edge);
+}
+`;
+
+function compile(type,source){
+const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);
+if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));
+return s;
+}
+function program(fs,v){
+const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fs));
+gl.bindAttribLocation(p,0,"a");gl.linkProgram(p);
+if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));
+return p;
+}
+let bgProgram,gemProgram;
+try{
+const v=compile(gl.VERTEX_SHADER,VS);
+bgProgram=program(BG,v);gemProgram=program(FS,v);
+}catch(e){console.warn(e);root.querySelector(".dc5-error").style.display="flex";return}
+
+const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+const bgRes=gl.getUniformLocation(bgProgram,"res");
+const gemRes=gl.getUniformLocation(gemProgram,"res");
+const gemRot=gl.getUniformLocation(gemProgram,"rot");
+const gemPlanes=gl.getUniformLocation(gemProgram,"planes[0]");
+const gemCount=gl.getUniformLocation(gemProgram,"count");
+const gemRadius=gl.getUniformLocation(gemProgram,"radius");
+const gemAlpha=gl.getUniformLocation(gemProgram,"alpha");
+
+const TAU=Math.PI*2,N=16;
+const sign=x=>x<0?-1:1;
+const sample=f=>Array.from({length:N},(_,i)=>{const a=i*TAU/N;return f(Math.cos(a),Math.sin(a),a)});
+const clipped=(x,z,c)=>[
+{x:x,z:z-c},{x:x-c,z:z},{x:-x+c,z:z},{x:-x,z:z-c},
+{x:-x,z:-z+c},{x:-x+c,z:-z},{x:x-c,z:-z},{x:x,z:-z+c}
+];
+
+function rayPolygon(poly){
+const points=[];
+for(let i=0;i<N;i++){
+const a=i*TAU/N,dx=Math.cos(a),dz=Math.sin(a);
+let best=1000;
+for(let j=0;j<poly.length;j++){
+const p=poly[j],q=poly[(j+1)%poly.length];
+const ex=q.x-p.x,ez=q.z-p.z,den=dx*ez-dz*ex;
+if(Math.abs(den)<1e-8)continue;
+const t=(p.x*ez-p.z*ex)/den,s=(p.x*dz-p.z*dx)/den;
+if(t>0&&s>=-1e-6&&s<=1+1e-6)best=Math.min(best,t);
+}
+points.push({x:dx*best,z:dz*best});
+}
+return points;
+}
+
+function outline(id){
+switch(id){
+case"oval":return sample((c,s)=>({x:1.18*c,z:.78*s}));
+case"pear":return sample((c,s)=>({x:.86*c*(1-.42*s),z:1.08*s+.14*(1-2*s*s)}));
+case"marquise":return sample((c,s)=>({x:1.30*c,z:.63*sign(s)*Math.pow(Math.abs(s),1.38)}));
+case"cushion":return sample((c,s)=>({x:sign(c)*Math.pow(Math.abs(c),.56),z:.90*sign(s)*Math.pow(Math.abs(s),.56)}));
+case"princess":return clipped(1,1,.06);
+case"emerald":return clipped(1.14,.76,.23);
+case"radiant":return clipped(1.10,.85,.16);
+case"asscher":return clipped(1,1,.34);
+case"trillion":return rayPolygon([{x:0,z:1.20},{x:-1.06,z:-.70},{x:1.06,z:-.70}]);
+default:return sample((c,s)=>({x:c,z:s}));
+}
+}
+
+// Normalize both the size and the center of each outline.
+function normalizeOutline(points){
+const xs=points.map(p=>p.x),zs=points.map(p=>p.z);
+const minX=Math.min(...xs),maxX=Math.max(...xs);
+const minZ=Math.min(...zs),maxZ=Math.max(...zs);
+const cx=(minX+maxX)/2,cz=(minZ+maxZ)/2;
+const halfExtent=Math.max(maxX-minX,maxZ-minZ)/2||1;
+return points.map(p=>({x:(p.x-cx)/halfExtent,z:(p.z-cz)/halfExtent}));
+}
+
+const sub=(a,b)=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z});
+const dot=(a,b)=>a.x*b.x+a.y*b.y+a.z*b.z;
+const cross=(a,b)=>({x:a.y*b.z-a.z*b.y,y:a.z*b.x-a.x*b.z,z:a.x*b.y-a.y*b.x});
+function model(id){
+const base=normalizeOutline(outline(id));
+const isStep=id==="emerald"||id==="asscher";
+const ring=(r,y)=>base.map(p=>({x:p.x*r,y,z:p.z*r}));
+const planes=new Float32Array(49*4),verts=[];
+let count=0;
+const collect=a=>{verts.push(...a);return a};
+const add=(n,d)=>{if(count<49){planes.set([n.x,n.y,n.z,d],count*4);count++}};
+const plane=(a,b,c)=>{
+let n=cross(sub(b,a),sub(c,a)),len=Math.hypot(n.x,n.y,n.z)||1;
+n={x:n.x/len,y:n.y/len,z:n.z/len};
+let d=dot(n,a);
+if(dot(n,{x:0,y:-.2,z:0})>d){n={x:-n.x,y:-n.y,z:-n.z};d=-d;}
+add(n,d);
+};
+if(isStep){
+const t=collect(ring(.52,.38)),c=collect(ring(.78,.20));
+const gu=collect(ring(1,.02)),gd=collect(ring(1,-.025));
+const p=collect(ring(.68,-.38)),bt=collect(ring(.20,-.83));
+add({x:0,y:1,z:0},.38);add({x:0,y:-1,z:0},.83);
+for(let i=0;i<base.length;i++){
+const j=(i+1)%base.length;
+plane(t[i],t[j],c[i]);plane(c[i],c[j],gu[i]);
+plane(gu[i],gu[j],gd[i]);plane(gd[i],gd[j],p[i]);plane(p[i],p[j],bt[i]);
+}
+}else{
+const t=collect(ring(.50,.42)),gu=collect(ring(1,.015)),gd=collect(ring(1,-.025));
+const tip={x:0,y:-.94,z:0};verts.push(tip);
+add({x:0,y:1,z:0},.42);
+for(let i=0;i<base.length;i++){
+const j=(i+1)%base.length;
+plane(t[i],t[j],gu[i]);plane(gu[i],gu[j],gd[i]);plane(gd[i],gd[j],tip);
+}
+}
+const radius=Math.max(...verts.map(v=>Math.hypot(v.x,v.y+.2,v.z)))+.035;
+return{planes,count,verts,radius};
+}
+const models={};
+for(const cut of CUTS)models[cut[0]]=model(cut[0]);
+
+let width=800,height=500,tier=0;
+const quality=[1,.86,.74];
+function resize(){
+const w=stage.clientWidth,h=stage.clientHeight;
+const ratio=Math.min(window.devicePixelRatio||1,w<600?.9:1.05)*quality[tier];
+width=Math.max(1,Math.round(w*ratio));height=Math.max(1,Math.round(h*ratio));
+canvas.width=width;canvas.height=height;
+gl.viewport(0,0,width,height);
+dirty=true;
+}
+if(window.ResizeObserver)new ResizeObserver(resize).observe(stage);
+else window.addEventListener("resize",resize);
+
+let yaw=0,pitch=.92,targetYaw=0,targetPitch=.92;
+let view="three",active="round",previous=null,transitionStart=0;
+let dragging=false,lastX=0,lastY=0,lastInteraction=performance.now();
+let lastMoveTime=0,velocityYaw=0,velocityPitch=0,inertiaYaw=0,inertiaPitch=0;
+let lastTime=0,dirty=true,visible=true,slow=0,fast=0;
+const reduced=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const dragYaw=.0038,dragPitch=.0031;
+const inertiaFriction=3.5;
+// Gentle studio turntable. It never moves the lights, only the stone.
+const orbitSpeed=.085,orbitDelay=2000;
+let orbitWeight=0;
+const matrix=new Float32Array(9);
+if(window.IntersectionObserver){
+new IntersectionObserver(entries=>{visible=!!entries[0]?.isIntersecting;dirty=true},{threshold:.01}).observe(root);
+}
+resize();
+
+function setCamera(mode){
+if(mode!=="reset")view=mode;
+targetYaw=0;targetPitch=view==="top"?Math.PI/2:.92;
+inertiaYaw=0;inertiaPitch=0;velocityYaw=0;velocityPitch=0;
+orbitWeight=0;
+lastInteraction=performance.now();dirty=true;
+for(const b of root.querySelectorAll(".dc5-view")){
+const selected=b.dataset.view===view;
+b.classList.toggle("active",selected);
+if(b.dataset.view!=="reset")b.setAttribute("aria-pressed",String(selected));
+}
+}
+root.querySelector(".dc5-views").addEventListener("click",e=>{
+const b=e.target.closest("button[data-view]");
+if(b)setCamera(b.dataset.view);
+});
+function setCut(id){
+if(!models[id]||active===id)return;
+previous=active;active=id;transitionStart=performance.now();
+setCamera(view);
+const c=CUTS.find(x=>x[0]===id);label.textContent=c[2];
+for(const b of picker.querySelectorAll("button")){
+const selected=b.dataset.cut===id;
+b.classList.toggle("active",selected);b.setAttribute("aria-pressed",String(selected));
+}
+}
+picker.addEventListener("click",e=>{
+const b=e.target.closest("button[data-cut]");
+if(b)setCut(b.dataset.cut);
+});
+function updateRotation(){
+const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+matrix[0]=cy;matrix[1]=sp*sy;matrix[2]=-cp*sy;
+matrix[3]=0;matrix[4]=cp;matrix[5]=sp;
+matrix[6]=sy;matrix[7]=-sp*cy;matrix[8]=cp*cy;
+}
+
+function bounds(m){
+const sc=width<height?2.75:2.50;
+const f=Math.min(width,height)/sc;
+const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+let minX=width,minY=height,maxX=0,maxY=0;
+for(const v of m.verts){
+const x=v.x*cy+v.z*sy,z=v.z*cy-v.x*sy;
+const y=v.y*cp-z*sp+.105;
+const px=width*.5+x*f,py=height*.5+y*f;
+minX=Math.min(minX,px);maxX=Math.max(maxX,px);
+minY=Math.min(minY,py);maxY=Math.max(maxY,py);
+}
+const pad=7,x=Math.max(0,Math.floor(minX-pad)),y=Math.max(0,Math.floor(minY-pad));
+return{x,y,w:Math.max(0,Math.min(width,Math.ceil(maxX+pad))-x),h:Math.max(0,Math.min(height,Math.ceil(maxY+pad))-y)};
+}
+function draw(m,a){
+const b=bounds(m);if(!b.w||!b.h)return;
+gl.uniform4fv(gemPlanes,m.planes);gl.uniform1i(gemCount,m.count);
+gl.uniform1f(gemRadius,m.radius);gl.uniform1f(gemAlpha,a);
+gl.enable(gl.SCISSOR_TEST);gl.scissor(b.x,b.y,b.w,b.h);
+gl.drawArrays(gl.TRIANGLES,0,6);gl.disable(gl.SCISSOR_TEST);
+}
+function adapt(dt){
+if(previous)return;
+if(dt>29){slow++;fast=0}else{slow=Math.max(0,slow-1);fast=dt<20?fast+1:0}
+if(slow>75&&tier<2){tier++;slow=0;fast=0;resize()}
+else if(fast>480&&tier>0){tier--;slow=0;fast=0;resize()}
+}
+function frame(t){
+if(!root.isConnected)return;
+requestAnimationFrame(frame);
+const dt=lastTime?Math.min(100,t-lastTime):16;lastTime=t;
+if(!visible||document.hidden)return;
+adapt(dt);
+const seconds=dt*.001;
+if(!dragging){
+const friction=Math.exp(-inertiaFriction*seconds);
+const travel=(1-friction)/inertiaFriction;
+if(Math.abs(inertiaYaw)>.0003||Math.abs(inertiaPitch)>.0003){
+targetYaw+=inertiaYaw*travel;targetPitch+=inertiaPitch*travel;
+inertiaYaw*=friction;inertiaPitch*=friction;
+dirty=true;
+}
+}
+// Resume only after direct manipulation and its inertia have settled.
+// The exponential ramp makes start/stop imperceptible, including after a tab switch.
+const orbitReady=!reduced&&!dragging&&!previous&&
+t-lastInteraction>orbitDelay&&Math.abs(inertiaYaw)<.015&&Math.abs(inertiaPitch)<.015;
+orbitWeight+=((orbitReady?1:0)-orbitWeight)*(1-Math.exp(-seconds*(orbitReady?1.2:6)));
+if(orbitWeight>.0001){targetYaw+=orbitSpeed*orbitWeight*seconds;dirty=true;}
+const ease=1-Math.exp(-seconds*(dragging?27:12));
+yaw+=(targetYaw-yaw)*ease;pitch+=(targetPitch-pitch)*ease;
+const moving=Math.abs(yaw-targetYaw)>.0003||Math.abs(pitch-targetPitch)>.0003;
+const transitioning=!!previous;
+const recent=t-lastInteraction<2300;
+if(!dirty&&!moving&&!transitioning&&!recent)return;
+dirty=false;
+updateRotation();
+gl.disable(gl.SCISSOR_TEST);gl.disable(gl.BLEND);
+gl.useProgram(bgProgram);gl.uniform2f(bgRes,width,height);gl.drawArrays(gl.TRIANGLES,0,6);
+gl.useProgram(gemProgram);gl.uniform2f(gemRes,width,height);
+gl.uniformMatrix3fv(gemRot,false,matrix);
+gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+if(previous){
+const p=Math.min(1,(t-transitionStart)/420),e=p*p*(3-2*p);
+draw(models[previous],1-e);draw(models[active],e);
+if(p>=1)previous=null;
+}else draw(models[active],1);
+gl.disable(gl.BLEND);
+}
+canvas.addEventListener("pointerdown",e=>{
+e.preventDefault();dragging=true;lastX=e.clientX;lastY=e.clientY;lastInteraction=performance.now();
+orbitWeight=0;
+targetYaw=yaw;targetPitch=pitch;
+velocityYaw=0;velocityPitch=0;inertiaYaw=0;inertiaPitch=0;lastMoveTime=lastInteraction;
+try{canvas.setPointerCapture(e.pointerId)}catch(_){}
+});
+canvas.addEventListener("pointermove",e=>{
+if(!dragging)return;
+const now=performance.now();
+const dx=e.clientX-lastX,dy=e.clientY-lastY;
+const elapsed=Math.max(8,Math.min(64,now-lastMoveTime));
+const blend=1-Math.exp(-elapsed/42);
+velocityYaw+=(Math.max(-3.2,Math.min(3.2,dx*dragYaw*1000/elapsed))-velocityYaw)*blend;
+velocityPitch+=(Math.max(-2.7,Math.min(2.7,dy*dragPitch*1000/elapsed))-velocityPitch)*blend;
+targetYaw+=dx*dragYaw;targetPitch+=dy*dragPitch;
+lastX=e.clientX;lastY=e.clientY;lastInteraction=now;lastMoveTime=now;dirty=true;
+});
+const release=e=>{
+if(!dragging)return;
+dragging=false;
+const now=performance.now();
+const freshness=Math.exp(-Math.max(0,now-lastMoveTime-45)/110);
+inertiaYaw=e?.type==="pointercancel"||reduced?0:velocityYaw*freshness;
+inertiaPitch=e?.type==="pointercancel"||reduced?0:velocityPitch*freshness;
+lastInteraction=now;dirty=true;
+};
+canvas.addEventListener("pointerup",release);canvas.addEventListener("pointercancel",release);
+canvas.addEventListener("lostpointercapture",release);
+requestAnimationFrame(frame);
+})();
+</script>
+</div>
+</main>

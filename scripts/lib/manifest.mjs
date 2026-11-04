@@ -227,8 +227,67 @@ function inspectCss(text, from, listed) {
   for (const match of css.matchAll(/@import\s+["']([^"']+)["']/gi)) resolveLocalResource(match[1], from, listed);
 }
 
+// A lexical HTML view for the existing import checks, not a sanitizer or a JS
+// parser. Keep script tags/attributes, but do not mistake their raw-text bodies
+// for HTML. In particular, an HTML </script> ends the body even in a JS string.
+function htmlOutsideScriptBodies(text) {
+  const chunks = [], foreign = [];
+  const raw = new Set(['script', 'style', 'title', 'textarea', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript']);
+  const commentEnd = /--!?>/g;
+  let cursor = 0;
+  const tagEnd = start => {
+    let quote = '';
+    for (let index = start + 1; index < text.length; index++) {
+      const char = text[index];
+      if (quote) { if (char === quote) quote = ''; }
+      else if (char === '"' || char === "'") quote = char;
+      else if (char === '>') return index + 1;
+    }
+    return text.length;
+  };
+  while (cursor < text.length) {
+    const start = text.indexOf('<', cursor);
+    if (start < 0) { chunks.push(text.slice(cursor)); break; }
+    chunks.push(text.slice(cursor, start));
+    if (text.startsWith('<!--', start)) {
+      if (text[start + 4] === '>') cursor = start + 5;
+      else if (text.startsWith('->', start + 4)) cursor = start + 6;
+      else { commentEnd.lastIndex = start + 4; cursor = commentEnd.exec(text) ? commentEnd.lastIndex : text.length; }
+      chunks.push('\n');
+      continue;
+    }
+    const tag = /^<(\/?)([a-z][^\t\n\f\r />]*)/i.exec(text.slice(start));
+    if (!tag) {
+      // Declarations and bogus comments cannot introduce a real script opener.
+      let end = start + 1;
+      if (text.startsWith('<![CDATA[', start)) { const close = text.indexOf(']]>', start + 9); end = close < 0 ? text.length : close + 3; }
+      else if (/^<!doctype(?:[\t\n\f\r >])/i.test(text.slice(start))) end = tagEnd(start);
+      else if (text[start + 1] === '!' || text[start + 1] === '?') { const close = text.indexOf('>', start + 2); end = close < 0 ? text.length : close + 1; }
+      chunks.push(text.slice(start, end)); cursor = end;
+      continue;
+    }
+    const end = tagEnd(start), token = text.slice(start, end), name = tag[2].toLowerCase();
+    chunks.push(token); cursor = end;
+    if (name === 'svg' || name === 'math') {
+      if (tag[1]) { const index = foreign.lastIndexOf(name); if (index >= 0) foreign.length = index; }
+      else if (!token.endsWith('/>')) foreign.push(name);
+    }
+    if (tag[1]) continue;
+    if (name === 'plaintext') { chunks.push(text.slice(cursor)); break; }
+    if (!raw.has(name)) continue;
+    // Other raw-text/RCDATA elements are retained for the existing CSS/resource
+    // checks, but their literal <script> text must not hide surrounding markup.
+    const close = new RegExp(`</${name}(?=[\\t\\n\\f\\r />])`, 'gi');
+    close.lastIndex = cursor;
+    const bodyEnd = close.exec(text)?.index ?? text.length;
+    chunks.push(name === 'script' && !foreign.length ? '\n' : text.slice(cursor, bodyEnd));
+    cursor = bodyEnd;
+  }
+  return chunks.join('');
+}
+
 function inspectMarkup(text, from, listed, scripts) {
-  const markup = text.replace(/<!--[\s\S]*?-->/g, '');
+  const markup = from.toLowerCase().endsWith('.svg') ? text.replace(/<!--[\s\S]*?-->/g, '') : htmlOutsideScriptBodies(text);
   check(!/<\s*(?:iframe|object|embed|base|form|portal|fencedframe)\b/i.test(markup), from, 'embedded pages, forms and base URLs are not allowed in previews');
   for (const meta of markup.matchAll(/<\s*meta\b[^>]*>/gi)) {
     const equiv = meta[0].match(/\bhttp-equiv\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
