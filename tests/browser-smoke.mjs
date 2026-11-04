@@ -9,6 +9,7 @@ import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { createStaticServer } from '../scripts/serve.mjs';
+import { verifyEmptyCatalog } from './browser-empty-checks.mjs';
 
 const moduleName = process.env.PLAYWRIGHT_MODULE || 'playwright';
 const playwright = await import(moduleName.startsWith('/') ? pathToFileURL(moduleName).href : moduleName);
@@ -178,15 +179,20 @@ try {
   assert.equal(catalogResponse.status(), 200);
   const catalog = await catalogResponse.json();
   assert.equal(catalog.schemaVersion, 1);
-  assert.ok(catalog.packs.length > 0, 'A real published pack is required; empty/demo-only success is not accepted');
+  assert.ok(Array.isArray(catalog.packs), 'Catalog has a real packs array');
   const grouped = new Map();
   for (const pack of [...catalog.packs].sort(byVersion)) if (!grouped.has(pack.id)) grouped.set(pack.id, pack);
   const latest = [...grouped.values()].sort(byTitle);
+  const totalAssets = latest.reduce((total, pack) => total + pack.assets.length, 0);
+  const viewports = [{ width: 320, height: 740 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 1000 }];
+  if (latest.length === 0) {
+    phase = 'empty-library';
+    await verifyEmptyCatalog({ page, context, navigation, engine, chooseTheme, appearance, shot, noOverflow, checks, viewports, activeTabLinked, poll, settle });
+    skipped.push('The published library is intentionally empty. Populated pack workflows are exercised only by isolated fixtures.');
+  } else {
   const primary = latest.find(pack => pack.id === 'interface-foundation') || latest[0];
   await waitCards(latest);
-  const totalAssets = latest.reduce((total, pack) => total + pack.assets.length, 0);
-  const summary = (await page.locator('.library-summary').innerText()).match(/\d+/g)?.map(Number);
-  assert.deepEqual(summary, [latest.length, totalAssets], 'Summary counts real latest-version data');
+  assert.equal(Number(await page.locator('.heading-count').innerText()), latest.length, 'Heading counts real latest-version data');
   await activeTabLinked(page.getByRole('tablist', { name: 'Коллекция' }));
   const requestNonce = await page.locator('meta[name="csp-nonce"]').getAttribute('content');
   assert.match(requestNonce, /^[A-Za-z0-9+/]{20,}={0,2}$/, 'HTML contains a real request nonce');
@@ -244,7 +250,7 @@ try {
   await waitCards([]);
   assert.equal(await page.locator('.empty-state h2').innerText(), 'Ничего не нашлось');
   await shot('empty-state-light');
-  await page.getByRole('button', { name: 'Показать все паки', exact: true }).click();
+  await page.getByRole('button', { name: 'Сбросить поиск', exact: true }).click();
   await waitCards(latest);
   assert.equal(await search().inputValue(), '');
   checks.push(phase);
@@ -352,10 +358,19 @@ try {
   await dialog().getByRole('combobox', { name: 'Версия пака', exact: true }).focus();
   await page.keyboard.press('Shift+Tab');
   assert.ok(await dialog().evaluate(node => node.contains(document.activeElement)), 'Shift+Tab cannot escape the modal');
+  const historyBeforeVersions = await page.evaluate(() => history.length);
   const otherVersion = catalog.packs.find(pack => pack.id === primary.id && pack.version !== primary.version);
   await dialog().getByRole('combobox', { name: 'Версия пака', exact: true }).click();
   await page.getByRole('option', { name: `v${otherVersion?.version || primary.version}`, exact: true }).click();
-  if (otherVersion) { await waitRoute(otherVersion); await dialog().getByRole('combobox', { name: 'Версия пака', exact: true }).click(); await page.getByRole('option', { name: `v${primary.version}`, exact: true }).click(); await waitRoute(primary); }
+  if (otherVersion) {
+    await waitRoute(otherVersion);
+    if (!otherVersion.scripts) await verifyFrame(dialog().locator('.detail-frame'), otherVersion);
+    await dialog().getByRole('combobox', { name: 'Версия пака', exact: true }).click();
+    await page.getByRole('option', { name: `v${primary.version}`, exact: true }).click();
+    await waitRoute(primary);
+    if (!primary.scripts) await verifyFrame(dialog().locator('.detail-frame'), primary);
+    assert.equal(await page.evaluate(() => history.length), historyBeforeVersions, 'Version previews must not add iframe entries to browser history');
+  }
   else skipped.push('Multi-version switching: the real catalog currently has one version of the primary pack; selector opening/selection still tested');
   await closePackWithEscape(primary);
   checks.push(phase);
@@ -412,7 +427,6 @@ try {
   assert.ok(await page.getByRole('button', { name: 'Добавить', exact: true }).evaluate(node => document.activeElement === node), 'Add dialog restores trigger focus');
   checks.push(phase);
 
-  const viewports = [{ width: 320, height: 740 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 1000 }];
   for (const theme of ['light', 'dark']) {
     await chooseTheme(theme);
     for (const viewport of viewports) {
@@ -467,6 +481,7 @@ try {
     }
   }
 
+  }
   phase = 'runtime-and-security-errors';
   await settle();
   const unexpectedFailures = requestFailures.filter(item => !/(?:ERR_ABORTED|NS_BINDING_ABORTED|AbortError|cancelled|canceled)/i.test(item.error || ''));

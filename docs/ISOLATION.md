@@ -33,11 +33,11 @@
 
 ## CSS-префиксы
 
-Примеры стартовых областей:
+Гипотетические примеры префиксов для разных паков. Эти имена не означают, что соответствующие паки есть в каталоге:
 
-- `.imon-foundation` и `--imon-foundation-*`;
-- `.imon-motion`, `--imon-motion-*` и keyframes `imon-motion-*`;
-- `.imon-layout` и `--imon-layout-*`.
+- `.example-controls` и `--example-controls-*`;
+- `.example-motion`, `--example-motion-*` и keyframes `example-motion-*`;
+- `.example-layout` и `--example-layout-*`.
 
 Это удобная инженерная договоренность, но не защита от вредоносного кода. Реальная граница отображения создается отдельным документом и sandbox. Даже аккуратно префиксованный пак не должен напрямую управлять DOM каталога.
 

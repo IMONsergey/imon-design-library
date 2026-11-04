@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { validatePack } from '../frontend/catalog.mjs';
 import { buildLibrary } from '../scripts/build.mjs';
+import { createCatalogFixture } from './helpers/catalog-fixture.mjs';
 
 const ORIGIN = 'https://css.imon.world';
 const HASH = 'a'.repeat(64);
@@ -41,15 +41,22 @@ test('catalog boundary is DOM-free, returns the same object and does not mutate 
   assert.deepEqual(pack, original);
 });
 
-test('every current published pack accepts the real builder output without frontend dependencies', t => {
-  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imon-catalog-boundary-test-'));
+test('catalog boundary accepts real builder output from an isolated temporary fixture', t => {
+  const { catalog, cleanup } = createCatalogFixture();
+  t.after(cleanup);
+  assert.deepEqual(catalog.packs.map(pack => pack.id), ['boundary-fixture']);
+  for (const pack of catalog.packs) assert.strictEqual(validatePack(pack, ORIGIN), pack);
+});
+
+test('catalog builder supports a genuinely empty library without publishing fixtures', t => {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'imon-empty-catalog-test-'));
   t.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
   fs.mkdirSync(path.join(temporaryRoot, 'site'));
-  fs.writeFileSync(path.join(temporaryRoot, 'site/index.html'), '<!doctype html><title>Catalog boundary fixture</title>');
-  fs.cpSync(fileURLToPath(new URL('../packs', import.meta.url)), path.join(temporaryRoot, 'packs'), { recursive: true });
-  const { catalog } = buildLibrary(temporaryRoot);
-  for (const id of ['interface-foundation', 'motion-essentials', 'layout-recipes']) assert.ok(catalog.packs.some(pack => pack.id === id), id);
-  for (const pack of catalog.packs) assert.strictEqual(validatePack(pack, ORIGIN), pack);
+  fs.writeFileSync(path.join(temporaryRoot, 'site/index.html'), '<!doctype html><title>Empty catalog fixture</title>');
+  const { catalog, health } = buildLibrary(temporaryRoot);
+  assert.deepEqual(catalog, { schemaVersion: 1, packs: [] });
+  assert.equal(health.packVersions, 0);
+  assert.equal(health.assets, 0);
 });
 
 test('only an explicit canonical HTTP(S) origin is accepted', () => {

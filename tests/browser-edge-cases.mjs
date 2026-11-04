@@ -1,15 +1,23 @@
 // Local-only, disposable browser QA. Never targets production or an existing profile.
 // PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs CHROME_BIN=/path/to/chrome node tests/browser-edge-cases.mjs
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { createStaticServer, PREVIEW_CSP } from '../scripts/serve.mjs';
+import { createCatalogFixture } from './helpers/catalog-fixture.mjs';
 
 assert.ok(!process.env.LIBRARY_URL, 'Unset LIBRARY_URL: edge cases only serve the local dist directory');
 const root = path.resolve('dist');
-const realCatalog = JSON.parse(await readFile(path.join(root, 'api/catalog.json'), 'utf8'));
-assert.ok(realCatalog.packs?.length, 'Build a local catalog with at least one sample pack first');
+const fixture = createCatalogFixture({ id: 'qa-edge-boundary', version: '1.0.0' });
+let realCatalog;
+try {
+  realCatalog = structuredClone(fixture.catalog);
+} finally {
+  // Only metadata is needed: preview responses below are intentionally mocked.
+  // The production catalog may be empty and must never receive QA content.
+  fixture.cleanup();
+}
+assert.equal(realCatalog.packs.length, 1, 'The disposable fixture supplies one generated pack');
 function scriptPack(version) {
   const pack = structuredClone(realCatalog.packs[0]);
   const previewPath = pack.previewUrl.split(`/previews/${pack.id}/${pack.version}/`)[1];
@@ -88,9 +96,9 @@ try {
   await gated(2, 'Version switch after running a different version');
   await runPreview(versions[0]);
   catalog = { schemaVersion: 1, packs: [] };
+  await page.goto('about:blank');
   await page.goto(base, { waitUntil: 'networkidle' });
-  await page.reload({ waitUntil: 'networkidle' });
-  await page.getByRole('heading', { name: 'Ничего не нашлось', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Пока нет паков', exact: true }).waitFor();
   assert.equal(await cards().count(), 0);
   catalog = { schemaVersion: 1, packs: [{ ...versions[0], scripts: 'false' }] };
   await page.reload({ waitUntil: 'networkidle' });

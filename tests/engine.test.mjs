@@ -326,5 +326,25 @@ test('empty libraries are valid and build an honest zero-pack catalog', (t) => {
   fs.renameSync(path.join(f.root, 'packs'), path.join(f.root, 'quarantined-packs'));
   const result = buildLibrary(f.root);
   assert.equal(result.catalog.packs.length, 0);
+  assert.equal(result.health.packVersions, 0);
   assert.equal(result.health.assets, 0);
+  assert.deepEqual(validateLibrary(f.root), { versions: 0, published: 0, assets: 0, bytes: 0, privateVersions: 0 });
+});
+
+test('removing every pack produces a clean release without stale raw, preview, manifest or ZIP files', (t) => {
+  const f = fixture(t);
+  const before = buildLibrary(f.root);
+  const pack = before.catalog.packs[0];
+  assert.equal(fs.existsSync(path.join(before.output, pack.downloadUrl.slice(1))), true);
+  fs.renameSync(path.join(f.root, 'packs'), path.join(f.root, 'retired-fixtures'));
+  fs.mkdirSync(path.join(f.root, 'packs'));
+  const after = buildLibrary(f.root);
+  assert.deepEqual(after.catalog, { schemaVersion: 1, packs: [] });
+  assert.equal(after.health.packVersions, 0);
+  assert.equal(after.health.assets, 0);
+  for (const folder of ['raw', 'previews', 'downloads', 'api/packs']) {
+    assert.equal(fs.existsSync(path.join(after.output, folder)), false, `${folder} is absent from the new public release`);
+  }
+  assert.ok(after.previous, 'the previous release is retained outside the public output');
+  assert.equal(fs.existsSync(path.join(after.previous, pack.downloadUrl.slice(1))), true);
 });
