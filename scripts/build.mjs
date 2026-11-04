@@ -69,6 +69,8 @@ export function buildLibrary(root = process.cwd(), { revision = process.env.LIBR
     const health = { status: 'ok', schemaVersion: 1, revision, packVersions: published.length, assets: published.reduce((sum, pack) => sum + pack.manifest.assets.length, 0) };
     write(staging, 'health.json', json(health));
     write(staging, MARKER, json({ id: MARKER_ID, revision }));
+    // mkdtemp is private (0700); the validated static release must be readable by nginx.
+    fs.chmodSync(staging, 0o755);
     if (fs.existsSync(output)) {
       previous = path.join(fs.mkdtempSync(path.join(cache, 'previous-')), 'dist');
       fs.renameSync(output, previous);

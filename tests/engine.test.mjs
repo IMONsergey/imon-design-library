@@ -247,6 +247,7 @@ test('only public published versions appear anywhere in the build output', (t) =
   assert.equal(result.catalog.packs.length, 1);
   assert.equal(result.excluded, 2);
   assert.equal(result.health.revision, 'abcdef0123456789');
+  assert.equal(fs.statSync(result.output).mode & 0o777, 0o755, 'nginx can traverse the public release root');
   assert.equal(fs.existsSync(path.join(result.output, 'raw', draft.manifest.id)), false);
   assert.equal(fs.existsSync(path.join(result.output, 'raw', privateManifest.id)), false);
   assert.equal(fs.existsSync(path.join(result.output, 'inbox')), false);

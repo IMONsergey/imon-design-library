@@ -8,7 +8,6 @@ Type=oneshot
 User=imon-design-library
 Group=imon-design-library
 WorkingDirectory=/srv/imon-design-library
-Environment=HOME=/srv/imon-design-library
 Environment=GIT_TERMINAL_PROMPT=0
 Environment=GIT_CONFIG_GLOBAL=/dev/null
 Environment=GIT_CONFIG_NOSYSTEM=1
