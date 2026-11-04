@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Кушон · Diamonds Collection</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#fff}
+#imon-diamond-cushion{position:relative;width:100%;height:100%;min-height:0;overflow:hidden;background:#fff;isolation:isolate;font-family:system-ui,-apple-system,sans-serif;-webkit-user-select:none;user-select:none;color-scheme:light}
+#imon-diamond-cushion,#imon-diamond-cushion *{box-sizing:border-box}
+#imon-diamond-cushion .dc5-stage{position:absolute;inset:0;background:#fff}
+#imon-diamond-cushion canvas{position:absolute;inset:0;display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+#imon-diamond-cushion canvas:active{cursor:grabbing}
+#imon-diamond-cushion canvas:focus-visible{outline:2px solid #8b99a6;outline-offset:-3px}
+#imon-diamond-cushion .dc5-head{position:absolute;top:18px;left:20px;right:20px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;pointer-events:none}
+#imon-diamond-cushion .dc5-name{margin:5px 0 0;font-size:12px;font-weight:400;line-height:1.5;color:#8191a0}
+#imon-diamond-cushion .dc5-views{display:flex;gap:3px;padding:3px;border:1px solid #eaf0f5;border-radius:8px;background:rgba(255,255,255,.88);pointer-events:auto}
+#imon-diamond-cushion .dc5-view{appearance:none;border:0;border-radius:5px;background:transparent;color:#7c8c9b;padding:7px 10px;font:500 11px/1.4 system-ui;cursor:pointer;transition:background .2s,color .2s}
+#imon-diamond-cushion .dc5-view.active{color:#415c74;background:#eef4f8}
+#imon-diamond-cushion .dc5-view:hover{color:#415c74;background:#f2f6f9}
+#imon-diamond-cushion .dc5-view:focus-visible{outline:2px solid #8b99a6;outline-offset:1px}
+#imon-diamond-cushion .dc5-view svg{display:block;width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+#imon-diamond-cushion .dc5-hint{position:absolute;left:50%;bottom:14px;margin:0;transform:translateX(-50%);white-space:nowrap;color:#a3afba;font-size:11px;line-height:1.5;pointer-events:none}
+#imon-diamond-cushion .dc5-error{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;background:#fff;color:#64717f;text-align:center;font-size:13px;line-height:1.5}
+#imon-diamond-cushion [hidden]{display:none!important}
+@media(max-height:360px),(max-width:560px) and (max-height:440px){#imon-diamond-cushion .dc5-head,#imon-diamond-cushion .dc5-hint{display:none}}
+@media(prefers-reduced-motion:reduce){#imon-diamond-cushion .dc5-view{transition:none}}
+</style>
+</head>
+<body>
+<main id="imon-diamond-cushion" class="dc5" data-cut="cushion" aria-label="Бриллиантовая огранка кушон">
+<div class="dc5-stage">
+<canvas width="480" height="360" tabindex="0" aria-label="Бриллиантовая огранка кушон. Перетаскивай для вращения. Стрелки меняют ракурс, Home сбрасывает положение." aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home"></canvas>
+<div class="dc5-head">
+<p class="dc5-name">Кушон</p>
+<div class="dc5-views" role="group" aria-label="Ракурс">
+<button type="button" class="dc5-view active" data-view="three" aria-label="Ракурс 3/4" aria-pressed="true">3/4</button>
+<button type="button" class="dc5-view" data-view="top" aria-label="Вид сверху" aria-pressed="false">Сверху</button>
+<button type="button" class="dc5-view" data-view="reset" aria-label="Сбросить положение"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M12.8 5.7A5 5 0 1 0 13 9M13 2v4H9"/></svg></button>
+</div>
+</div>
+<p class="dc5-hint">Потяни, чтобы вращать</p>
+</div>
+<div class="dc5-error" role="status" hidden>WebGL недоступен. Попробуй браузер с аппаратным ускорением.</div>
+<noscript><div class="dc5-error">Для интерактивного превью нужен JavaScript.</div></noscript>
+<script>
+(()=>{
+"use strict";
+const root=document.getElementById("imon-diamond-cushion");
+if(!root||root.dataset.ready)return;
+root.dataset.ready="1";
+const CUT_ID="cushion";
+const stage=root.querySelector(".dc5-stage"),canvas=root.querySelector("canvas"),errorBox=root.querySelector(".dc5-error");
+let gl;
+try{gl=canvas.getContext("webgl",{alpha:false,antialias:true,preserveDrawingBuffer:true,powerPreference:"high-performance"})}catch(_){gl=null}
+if(!gl){root.dataset.status="unavailable";errorBox.hidden=false;return}
+
+const VS="attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
+const BG=`
+precision highp float;
+uniform vec2 res;
+void main(){
+vec2 uv=(gl_FragCoord.xy-res*.5)/min(res.x,res.y);
+float sh=exp(-pow(uv.x/.43,2.)*2.1-pow((uv.y+.39)/.075,2.)*1.65);
+gl_FragColor=vec4(vec3(1.)-sh*vec3(.105,.095,.085),1.);
+}`;
+const FS=`
+precision highp float;
+uniform vec2 res;
+uniform mat3 rot;
+uniform vec4 planes[49];
+uniform int count;
+uniform float radius;
+uniform float alpha;
+
+vec3 loc(vec3 v){return vec3(dot(v,rot[0]),dot(v,rot[1]),dot(v,rot[2]));}
+float panel(vec2 p,vec2 c,vec2 s,float f){vec2 d=abs(p-c)-s;return 1.-smoothstep(0.,f,max(d.x,d.y));}
+
+vec3 env(vec3 ray){
+vec3 d=normalize(ray);
+float a=atan(d.x,d.z),e=asin(clamp(d.y,-1.,1.));
+vec2 q=vec2(a,e);
+// One fixed studio rig. Its highlights respond to the stone, not to a timer.
+float key=panel(q,vec2(-.72,.3),vec2(.25,.77),.13);
+float strip=panel(q,vec2(.48,.45),vec2(.12,.87),.12);
+float rim=panel(q,vec2(2.08,.15),vec2(.3,.87),.14);
+float overhead=panel(q,vec2(-1.5,1.07),vec2(.5,.4),.15);
+float flag=panel(q,vec2(.03,-.12),vec2(.15,1.03),.13);
+float side=panel(q,vec2(1.28,-.15),vec2(.20,.8),.16);
+float v=.89+.12*d.y+.28*key+.30*strip+.19*rim+.15*overhead-.40*flag-.18*side;
+v=clamp(v,.58,1.35);
+return clamp(vec3(v*.965+.012,v*.995+.01,v*1.035+.016),0.,1.3);
+}
+
+// Bright cores of the SAME white studio panels. Splitting their outgoing
+// directions produces colour where the diamond bends the light.
+float studioSource(vec3 ray,vec3 surfacePoint){
+// Nearby softboxes have parallax, so their reflections travel across a facet
+// instead of colouring the entire facet like a flat decal.
+vec3 d=normalize(ray+.26*surfacePoint);
+vec2 q=vec2(atan(d.x,d.z),asin(clamp(d.y,-1.,1.)));
+float key=panel(q,vec2(-.72,.3),vec2(.085,.66),.055);
+float strip=panel(q,vec2(.48,.45),vec2(.038,.80),.045);
+float rim=panel(q,vec2(2.08,.15),vec2(.095,.68),.055);
+float back=panel(q,vec2(-2.30,.52),vec2(.045,.50),.055);
+float side=panel(q,vec2(1.32,-.15),vec2(.042,.60),.050);
+return .85*key+1.25*strip+.68*rim+.70*back+.76*side;
+}
+
+bool enterGem(vec3 o,vec3 d,out float tn,out float tf,out vec3 normal){
+float nearT=-10000.,farT=10000.;vec3 nn=vec3(0.,0.,1.);
+for(int i=0;i<49;i++){
+if(i>=count)break;
+vec4 p=planes[i];float den=dot(p.xyz,d),distance=p.w-dot(p.xyz,o);
+if(abs(den)<.00001){if(distance<-.00001)return false;}
+else{float t=distance/den;if(den<0.){if(t>nearT){nearT=t;nn=p.xyz;}}else farT=min(farT,t);}
+}
+tn=nearT;tf=farT;normal=nn;
+return nearT<=farT&&farT>0.&&nearT>0.;
+}
+
+bool leaveGem(vec3 o,vec3 d,out float dist,out vec3 normal){
+float nearest=10000.;vec3 nn=vec3(0.,1.,0.);
+for(int i=0;i<49;i++){
+if(i>=count)break;
+vec4 p=planes[i];float den=dot(p.xyz,d);
+if(den>.00001){float t=(p.w-dot(p.xyz,o))/den;if(t>.0001&&t<nearest){nearest=t;nn=p.xyz;}}
+}
+dist=nearest;normal=nn;return nearest<9999.;
+}
+
+// Exact dielectric Fresnel: transmission smoothly vanishes at the critical
+// angle, rather than snapping from a coloured exit to total reflection.
+float exitLight(vec3 inside,vec3 outward,float ior,out vec3 direction){
+direction=vec3(0.);
+float cosI=clamp(dot(inside,outward),0.,1.);
+float sinT2=ior*ior*max(0.,1.-cosI*cosI);
+if(sinT2>=1.)return 0.;
+float cosT=sqrt(max(0.,1.-sinT2));
+float rs=(ior*cosI-cosT)/max(.0001,ior*cosI+cosT);
+float rp=(cosI-ior*cosT)/max(.0001,cosI+ior*cosT);
+direction=refract(inside,-outward,ior);
+if(dot(direction,direction)<.0001)return 0.;
+return clamp(1.-.5*(rs*rs+rp*rp),0.,1.);
+}
+
+vec3 transmission(vec3 entry,vec3 incident,vec3 normal){
+// All wavelengths follow the SAME internal facet sequence. Splitting only
+// the outgoing directions gives genuine optical fire without RGB path jumps.
+vec3 ray=refract(incident,normal,1./2.423);
+if(dot(ray,ray)<.0001)return env(rot*reflect(incident,normal));
+vec3 pos=entry+ray*.0018;
+vec3 radiance=vec3(0.),remaining=vec3(1.);
+for(int bounce=0;bounce<3;bounce++){
+float dist;vec3 exitNormal;
+if(!leaveGem(pos,ray,dist,exitNormal))break;
+vec3 hit=pos+ray*dist;
+vec3 outR,outG,outB;
+float tR=exitLight(ray,exitNormal,2.391,outR);
+float tG=exitLight(ray,exitNormal,2.423,outG);
+float tB=exitLight(ray,exitNormal,2.479,outB);
+vec3 direct=vec3(0.);
+vec3 point=rot*hit;
+if(tR>.0001){vec3 d=rot*outR;direct.r=tR*(env(d).r+.96*studioSource(d,point));}
+if(tG>.0001){vec3 d=rot*outG;direct.g=tG*(env(d).g+.96*studioSource(d,point));}
+if(tB>.0001){vec3 d=rot*outB;direct.b=tB*(env(d).b+.96*studioSource(d,point));}
+radiance+=remaining*direct;
+remaining*=vec3(1.-tR,1.-tG,1.-tB);
+vec3 reflected=normalize(reflect(ray,exitNormal));
+if(max(remaining.r,max(remaining.g,remaining.b))<.035)
+return radiance+remaining*env(rot*reflected)*.91;
+ray=reflected;pos=hit+ray*.0018;
+}
+return radiance+remaining*env(rot*ray)*.91;
+}
+
+void main(){
+vec2 uv=(gl_FragCoord.xy-res*.5)/min(res.x,res.y);
+
+// Orthographic camera: the apparent size does not depend on rotation.
+float scale=res.x<res.y?2.75:2.50;
+vec3 camera=vec3(uv*scale,4.1);
+vec3 origin=loc(camera-vec3(0.,.105,0.));
+vec3 ray=normalize(loc(vec3(0.,0.,-1.)));
+
+vec3 oc=origin-vec3(0.,-.2,0.);
+float b=dot(oc,ray);
+if(b*b-(dot(oc,oc)-radius*radius)<0.){gl_FragColor=vec4(0.);return;}
+float tn,tf;vec3 n;
+if(!enterGem(origin,ray,tn,tf,n)){gl_FragColor=vec4(0.);return;}
+vec3 hit=origin+ray*tn;
+vec3 tr=transmission(hit,ray,n);
+// Increase the saturation of genuine wavelength separation, not a painted
+// texture. Neutral rays stay neutral; only dispersed light gains colour.
+float trLum=dot(tr,vec3(.333333));
+tr=clamp(vec3(trLum)+(tr-vec3(trLum))*2.2,0.,1.4);
+vec3 reflected=normalize(rot*reflect(ray,n));
+float incidence=clamp(-dot(ray,n),0.,1.);
+float fresnel=.172+.828*pow(1.-incidence,5.);
+vec3 col=mix(tr,env(reflected),max(.23,fresnel));
+vec3 key=normalize(vec3(-.49,.68,.56));
+vec3 side=normalize(vec3(.75,.46,.47));
+float glint=pow(max(0.,dot(reflected,key)),108.);
+col+=vec3(.96,.985,1.)*glint*.73;
+col+=vec3(.79,.87,1.)*pow(max(0.,dot(reflected,side)),100.)*.36;
+col=mix(vec3(.985,.993,1.),col,.87);
+col=pow(clamp(col,0.,1.),vec3(.73));
+col+=pow(1.-incidence,3.)*vec3(.008,.015,.025);
+float edge=smoothstep(.003,.067,tf-tn);
+gl_FragColor=vec4(clamp(col,0.,1.),alpha*edge);
+}
+`;
+
+const TAU=Math.PI*2,N=16;
+const sign=x=>x<0?-1:1;
+const sample=f=>Array.from({length:N},(_,i)=>{const a=i*TAU/N;return f(Math.cos(a),Math.sin(a),a)});
+const clipped=(x,z,c)=>[
+{x:x,z:z-c},{x:x-c,z:z},{x:-x+c,z:z},{x:-x,z:z-c},
+{x:-x,z:-z+c},{x:-x+c,z:-z},{x:x-c,z:-z},{x:x,z:-z+c}
+];
+
+function rayPolygon(poly){
+const points=[];
+for(let i=0;i<N;i++){
+const a=i*TAU/N,dx=Math.cos(a),dz=Math.sin(a);
+let best=1000;
+for(let j=0;j<poly.length;j++){
+const p=poly[j],q=poly[(j+1)%poly.length];
+const ex=q.x-p.x,ez=q.z-p.z,den=dx*ez-dz*ex;
+if(Math.abs(den)<1e-8)continue;
+const t=(p.x*ez-p.z*ex)/den,s=(p.x*dz-p.z*dx)/den;
+if(t>0&&s>=-1e-6&&s<=1+1e-6)best=Math.min(best,t);
+}
+points.push({x:dx*best,z:dz*best});
+}
+return points;
+}
+
+function outline(id){
+switch(id){
+case"oval":return sample((c,s)=>({x:1.18*c,z:.78*s}));
+case"pear":return sample((c,s)=>({x:.86*c*(1-.42*s),z:1.08*s+.14*(1-2*s*s)}));
+case"marquise":return sample((c,s)=>({x:1.30*c,z:.63*sign(s)*Math.pow(Math.abs(s),1.38)}));
+case"cushion":return sample((c,s)=>({x:sign(c)*Math.pow(Math.abs(c),.56),z:.90*sign(s)*Math.pow(Math.abs(s),.56)}));
+case"princess":return clipped(1,1,.06);
+case"emerald":return clipped(1.14,.76,.23);
+case"radiant":return clipped(1.10,.85,.16);
+case"asscher":return clipped(1,1,.34);
+case"trillion":return rayPolygon([{x:0,z:1.20},{x:-1.06,z:-.70},{x:1.06,z:-.70}]);
+default:return sample((c,s)=>({x:c,z:s}));
+}
+}
+
+// Normalize both the size and the center of each outline.
+function normalizeOutline(points){
+const xs=points.map(p=>p.x),zs=points.map(p=>p.z);
+const minX=Math.min(...xs),maxX=Math.max(...xs);
+const minZ=Math.min(...zs),maxZ=Math.max(...zs);
+const cx=(minX+maxX)/2,cz=(minZ+maxZ)/2;
+const halfExtent=Math.max(maxX-minX,maxZ-minZ)/2||1;
+return points.map(p=>({x:(p.x-cx)/halfExtent,z:(p.z-cz)/halfExtent}));
+}
+
+const sub=(a,b)=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z});
+const dot=(a,b)=>a.x*b.x+a.y*b.y+a.z*b.z;
+const cross=(a,b)=>({x:a.y*b.z-a.z*b.y,y:a.z*b.x-a.x*b.z,z:a.x*b.y-a.y*b.x});
+function model(id){
+const base=normalizeOutline(outline(id));
+const isStep=id==="emerald"||id==="asscher";
+const ring=(r,y)=>base.map(p=>({x:p.x*r,y,z:p.z*r}));
+const planes=new Float32Array(49*4),verts=[];
+let count=0;
+const collect=a=>{verts.push(...a);return a};
+const add=(n,d)=>{if(count<49){planes.set([n.x,n.y,n.z,d],count*4);count++}};
+const plane=(a,b,c)=>{
+let n=cross(sub(b,a),sub(c,a)),len=Math.hypot(n.x,n.y,n.z)||1;
+n={x:n.x/len,y:n.y/len,z:n.z/len};
+let d=dot(n,a);
+if(dot(n,{x:0,y:-.2,z:0})>d){n={x:-n.x,y:-n.y,z:-n.z};d=-d;}
+add(n,d);
+};
+if(isStep){
+const t=collect(ring(.52,.38)),c=collect(ring(.78,.20));
+const gu=collect(ring(1,.02)),gd=collect(ring(1,-.025));
+const p=collect(ring(.68,-.38)),bt=collect(ring(.20,-.83));
+add({x:0,y:1,z:0},.38);add({x:0,y:-1,z:0},.83);
+for(let i=0;i<base.length;i++){
+const j=(i+1)%base.length;
+plane(t[i],t[j],c[i]);plane(c[i],c[j],gu[i]);
+plane(gu[i],gu[j],gd[i]);plane(gd[i],gd[j],p[i]);plane(p[i],p[j],bt[i]);
+}
+}else{
+const t=collect(ring(.50,.42)),gu=collect(ring(1,.015)),gd=collect(ring(1,-.025));
+const tip={x:0,y:-.94,z:0};verts.push(tip);
+add({x:0,y:1,z:0},.42);
+for(let i=0;i<base.length;i++){
+const j=(i+1)%base.length;
+plane(t[i],t[j],gu[i]);plane(gu[i],gu[j],gd[i]);plane(gd[i],gd[j],tip);
+}
+}
+const radius=Math.max(...verts.map(v=>Math.hypot(v.x,v.y+.2,v.z)))+.035;
+return{planes,count,verts,radius};
+}
+
+let bgProgram,gemProgram,buffer,bgRes,gemRes,gemRot,gemPlanes,gemCount,gemRadius,gemAlpha;
+let gpuShaders=[],gpuPrograms=[];
+let width=1,height=1,tier=0,compact=true;
+const quality=[1,.86,.74],gem=model(CUT_ID);
+let yaw=0,pitch=.92,targetYaw=0,targetPitch=.92,view="three";
+let dragging=false,lastX=0,lastY=0,lastInteraction=performance.now();
+let lastMoveTime=0,velocityYaw=0,velocityPitch=0,inertiaYaw=0,inertiaPitch=0;
+let lastTime=0,lastDrawTime=0,dirty=true,visible=true,slow=0,fast=0;
+let rafId=0,wakeId=0,destroyed=false,contextLost=false;
+let resizeObserver,intersectionObserver,removalObserver;
+const media=window.matchMedia("(prefers-reduced-motion: reduce)");
+let reduced=media.matches;
+const dragYaw=.0038,dragPitch=.0031,inertiaFriction=3.5;
+const orbitSpeed=.085,orbitDelay=2000;
+let orbitWeight=0;
+const matrix=new Float32Array(9),events=new AbortController();
+const listen=(target,name,handler,options={})=>target.addEventListener(name,handler,{...options,signal:events.signal});
+
+function releaseGpu(){
+if(buffer)gl.deleteBuffer(buffer);
+for(const p of gpuPrograms)gl.deleteProgram(p);
+for(const s of gpuShaders)gl.deleteShader(s);
+buffer=null;gpuPrograms=[];gpuShaders=[];
+}
+function compile(type,source){
+const s=gl.createShader(type);if(!s)throw Error("Shader allocation failed");
+gpuShaders.push(s);gl.shaderSource(s,source);gl.compileShader(s);
+if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error("Shader compilation failed");
+return s;
+}
+function program(fs,v){
+const p=gl.createProgram();if(!p)throw Error("Program allocation failed");
+gpuPrograms.push(p);gl.attachShader(p,v);gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fs));
+gl.bindAttribLocation(p,0,"a");gl.linkProgram(p);
+if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error("Program linking failed");
+return p;
+}
+function initializeGpu(){
+releaseGpu();
+const v=compile(gl.VERTEX_SHADER,VS);
+bgProgram=program(BG,v);gemProgram=program(FS,v);
+buffer=gl.createBuffer();if(!buffer)throw Error("Buffer allocation failed");
+gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+bgRes=gl.getUniformLocation(bgProgram,"res");gemRes=gl.getUniformLocation(gemProgram,"res");
+gemRot=gl.getUniformLocation(gemProgram,"rot");gemPlanes=gl.getUniformLocation(gemProgram,"planes[0]");
+gemCount=gl.getUniformLocation(gemProgram,"count");gemRadius=gl.getUniformLocation(gemProgram,"radius");gemAlpha=gl.getUniformLocation(gemProgram,"alpha");
+errorBox.hidden=true;root.dataset.status="initializing";
+}
+function stop(){
+if(rafId)cancelAnimationFrame(rafId);
+if(wakeId)clearTimeout(wakeId);
+rafId=0;wakeId=0;lastTime=0;lastDrawTime=0;orbitWeight=0;
+}
+function destroy(){
+if(destroyed)return;destroyed=true;stop();events.abort();
+resizeObserver?.disconnect();intersectionObserver?.disconnect();removalObserver?.disconnect();
+if(!contextLost){releaseGpu();gl.getExtension("WEBGL_lose_context")?.loseContext()}
+root.dataset.status="stopped";
+}
+function schedule(){
+if(destroyed||contextLost||document.hidden||!visible)return;
+if(!root.isConnected){destroy();return}
+if(!rafId)rafId=requestAnimationFrame(frame);
+}
+function wake(){
+if(wakeId){clearTimeout(wakeId);wakeId=0}
+dirty=true;schedule();
+}
+function unavailable(message){
+stop();errorBox.textContent=message;errorBox.hidden=false;root.dataset.status="unavailable";
+}
+function resize(){
+if(destroyed)return;
+const w=stage.clientWidth,h=stage.clientHeight;
+if(!w||!h){stop();return}
+compact=h<=360||(w<=560&&h<=440);
+const ratio=compact?Math.min(window.devicePixelRatio||1,1,480/Math.max(w,h)):Math.min(window.devicePixelRatio||1,w<600?.9:1.05)*quality[tier];
+width=Math.max(1,Math.round(w*ratio));height=Math.max(1,Math.round(h*ratio));
+const resized=canvas.width!==width||canvas.height!==height;
+if(canvas.width!==width)canvas.width=width;
+if(canvas.height!==height)canvas.height=height;
+if(!contextLost){
+gl.viewport(0,0,width,height);
+if(resized||root.dataset.status==="initializing"){
+root.dataset.status="pending";
+gl.disable(gl.SCISSOR_TEST);gl.clearColor(1,1,1,1);gl.clear(gl.COLOR_BUFFER_BIT);
+}
+}
+root.dataset.quality=compact?"card":"full";wake();
+}
+function setCamera(mode){
+if(mode!=="reset")view=mode;
+targetYaw=0;targetPitch=view==="top"?Math.PI/2:.92;
+inertiaYaw=0;inertiaPitch=0;velocityYaw=0;velocityPitch=0;orbitWeight=0;
+lastInteraction=performance.now();
+for(const b of root.querySelectorAll(".dc5-view")){
+const selected=b.dataset.view===view;b.classList.toggle("active",selected);
+if(b.dataset.view!=="reset")b.setAttribute("aria-pressed",String(selected));
+}
+wake();
+}
+function updateRotation(){
+const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+matrix[0]=cy;matrix[1]=sp*sy;matrix[2]=-cp*sy;
+matrix[3]=0;matrix[4]=cp;matrix[5]=sp;
+matrix[6]=sy;matrix[7]=-sp*cy;matrix[8]=cp*cy;
+}
+
+function bounds(m){
+const sc=width<height?2.75:2.50;
+const f=Math.min(width,height)/sc;
+const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+let minX=width,minY=height,maxX=0,maxY=0;
+for(const v of m.verts){
+const x=v.x*cy+v.z*sy,z=v.z*cy-v.x*sy;
+const y=v.y*cp-z*sp+.105;
+const px=width*.5+x*f,py=height*.5+y*f;
+minX=Math.min(minX,px);maxX=Math.max(maxX,px);
+minY=Math.min(minY,py);maxY=Math.max(maxY,py);
+}
+const pad=7,x=Math.max(0,Math.floor(minX-pad)),y=Math.max(0,Math.floor(minY-pad));
+return{x,y,w:Math.max(0,Math.min(width,Math.ceil(maxX+pad))-x),h:Math.max(0,Math.min(height,Math.ceil(maxY+pad))-y)};
+}
+function draw(m,a){
+const b=bounds(m);if(!b.w||!b.h)return;
+gl.uniform4fv(gemPlanes,m.planes);gl.uniform1i(gemCount,m.count);
+gl.uniform1f(gemRadius,m.radius);gl.uniform1f(gemAlpha,a);
+gl.enable(gl.SCISSOR_TEST);gl.scissor(b.x,b.y,b.w,b.h);
+gl.drawArrays(gl.TRIANGLES,0,6);gl.disable(gl.SCISSOR_TEST);
+}
+
+function adapt(dt){
+if(compact)return;
+if(dt>29){slow++;fast=0}else{slow=Math.max(0,slow-1);fast=dt<20?fast+1:0}
+if(slow>75&&tier<2){tier++;slow=0;fast=0;resize()}
+else if(fast>480&&tier>0){tier--;slow=0;fast=0;resize()}
+}
+function frame(t){
+rafId=0;
+if(destroyed||contextLost)return;
+if(!root.isConnected){destroy();return}
+if(!visible||document.hidden){stop();return}
+if(lastDrawTime&&t-lastDrawTime<(compact?1000/30:1000/60)-1){schedule();return}
+const dt=lastTime?Math.min(100,t-lastTime):16;lastTime=t;lastDrawTime=t;
+adapt(dt);
+const seconds=dt*.001;
+if(!dragging){
+const friction=Math.exp(-inertiaFriction*seconds),travel=(1-friction)/inertiaFriction;
+if(Math.abs(inertiaYaw)>.0003||Math.abs(inertiaPitch)>.0003){
+targetYaw+=inertiaYaw*travel;targetPitch+=inertiaPitch*travel;inertiaYaw*=friction;inertiaPitch*=friction;dirty=true;
+}
+}
+const orbitReady=!reduced&&!dragging&&t-lastInteraction>orbitDelay&&Math.abs(inertiaYaw)<.015&&Math.abs(inertiaPitch)<.015;
+orbitWeight+=((orbitReady?1:0)-orbitWeight)*(1-Math.exp(-seconds*(orbitReady?1.2:6)));
+if(orbitWeight>.0001){targetYaw+=orbitSpeed*orbitWeight*seconds;dirty=true}
+const ease=1-Math.exp(-seconds*(dragging?27:12));
+yaw+=(targetYaw-yaw)*ease;pitch+=(targetPitch-pitch)*ease;
+const moving=Math.abs(yaw-targetYaw)>.0003||Math.abs(pitch-targetPitch)>.0003;
+if(dirty||moving){
+dirty=false;updateRotation();
+gl.disable(gl.SCISSOR_TEST);gl.disable(gl.BLEND);
+gl.useProgram(bgProgram);gl.uniform2f(bgRes,width,height);gl.drawArrays(gl.TRIANGLES,0,6);
+gl.useProgram(gemProgram);gl.uniform2f(gemRes,width,height);gl.uniformMatrix3fv(gemRot,false,matrix);
+gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);draw(gem,1);gl.disable(gl.BLEND);
+if(root.dataset.status!=="ready")root.dataset.status="ready";
+}
+if(moving||dirty||Math.abs(inertiaYaw)>.0003||Math.abs(inertiaPitch)>.0003||orbitReady||orbitWeight>.0001)schedule();
+else if(!reduced&&!dragging){
+lastTime=0;
+wakeId=setTimeout(()=>{wakeId=0;schedule()},Math.max(16,orbitDelay-(performance.now()-lastInteraction)+16));
+}
+}
+
+listen(root.querySelector(".dc5-views"),"click",e=>{const b=e.target.closest("button[data-view]");if(b)setCamera(b.dataset.view)});
+listen(canvas,"pointerdown",e=>{
+e.preventDefault();dragging=true;lastX=e.clientX;lastY=e.clientY;lastInteraction=performance.now();
+orbitWeight=0;targetYaw=yaw;targetPitch=pitch;
+velocityYaw=0;velocityPitch=0;inertiaYaw=0;inertiaPitch=0;lastMoveTime=lastInteraction;
+try{canvas.setPointerCapture(e.pointerId)}catch(_){}
+wake();
+});
+listen(canvas,"pointermove",e=>{
+if(!dragging)return;
+const now=performance.now(),dx=e.clientX-lastX,dy=e.clientY-lastY;
+const elapsed=Math.max(8,Math.min(64,now-lastMoveTime)),blend=1-Math.exp(-elapsed/42);
+velocityYaw+=(Math.max(-3.2,Math.min(3.2,dx*dragYaw*1000/elapsed))-velocityYaw)*blend;
+velocityPitch+=(Math.max(-2.7,Math.min(2.7,dy*dragPitch*1000/elapsed))-velocityPitch)*blend;
+targetYaw+=dx*dragYaw;targetPitch+=dy*dragPitch;
+lastX=e.clientX;lastY=e.clientY;lastInteraction=now;lastMoveTime=now;wake();
+});
+const release=e=>{
+if(!dragging)return;dragging=false;
+const now=performance.now(),freshness=Math.exp(-Math.max(0,now-lastMoveTime-45)/110);
+inertiaYaw=e?.type==="pointercancel"||reduced?0:velocityYaw*freshness;
+inertiaPitch=e?.type==="pointercancel"||reduced?0:velocityPitch*freshness;
+lastInteraction=now;wake();
+};
+listen(canvas,"pointerup",release);listen(canvas,"pointercancel",release);listen(canvas,"lostpointercapture",release);
+listen(canvas,"keydown",e=>{
+const directions={ArrowLeft:[-.12,0],ArrowRight:[.12,0],ArrowUp:[0,-.10],ArrowDown:[0,.10]};
+if(e.key==="Home"){e.preventDefault();setCamera("reset");return}
+const direction=directions[e.key];if(!direction)return;
+e.preventDefault();targetYaw+=direction[0];targetPitch+=direction[1];
+inertiaYaw=0;inertiaPitch=0;orbitWeight=0;lastInteraction=performance.now();wake();
+});
+listen(canvas,"webglcontextlost",e=>{
+e.preventDefault();contextLost=true;stop();dragging=false;
+gpuShaders=[];gpuPrograms=[];buffer=null;
+errorBox.textContent="Контекст WebGL потерян. Ожидаем восстановления.";errorBox.hidden=false;root.dataset.status="context-lost";
+});
+listen(canvas,"webglcontextrestored",()=>{
+if(destroyed)return;contextLost=false;lastInteraction=performance.now();
+try{initializeGpu();resize()}catch(_){unavailable("Не удалось восстановить WebGL. Обнови страницу.")}
+});
+listen(document,"visibilitychange",()=>{if(document.hidden){dragging=false;stop()}else wake()});
+listen(media,"change",e=>{reduced=e.matches;inertiaYaw=0;inertiaPitch=0;orbitWeight=0;lastInteraction=performance.now();root.dataset.motion=reduced?"reduced":"auto";wake()});
+listen(window,"pagehide",e=>{if(e.persisted)stop();else destroy()});
+listen(window,"pageshow",e=>{if(e.persisted)wake()});
+try{initializeGpu()}catch(_){releaseGpu();unavailable("WebGL недоступен. Попробуй браузер с аппаратным ускорением.");events.abort();return}
+root.dataset.motion=reduced?"reduced":"auto";
+if(window.ResizeObserver){resizeObserver=new ResizeObserver(resize);resizeObserver.observe(stage)}else listen(window,"resize",resize);
+if(window.IntersectionObserver){
+intersectionObserver=new IntersectionObserver(entries=>{visible=!!entries[0]?.isIntersecting;if(visible)wake();else stop()},{threshold:.01});intersectionObserver.observe(root);
+}
+removalObserver=new MutationObserver(()=>{if(!root.isConnected)destroy()});
+removalObserver.observe(document.documentElement,{childList:true,subtree:true});
+resize();
+})();
+</script>
+</main>
+</body>
+</html>

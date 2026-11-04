@@ -1,4 +1,5 @@
-// Focused, isolated headless QA for the owner's first real asset.
+// Historical 1.0.0 source/renderer QA, independent of the current catalog UI.
+// Current folder/collection/individual-asset UI: tests/browser-diamonds.mjs.
 // npm run build && node tests/browser-visual-weblg.mjs
 // Uses PLAYWRIGHT_MODULE, BROWSER_ENGINE, CHROME_BIN/FIREFOX_BIN/WEBKIT_BIN,
 // optional LIBRARY_URL and SCREENSHOTS_DIR. SOFTWARE_WEBGL=1 is explicit opt-in
@@ -142,35 +143,18 @@ try {
   assert.ok((await previewResponse.body()).includes(originalBytes), 'The preview wraps the unchanged original HTML');
   checks.push(phase);
 
-  phase = 'manual-launch-and-isolation';
+  phase = 'historical-renderer';
   page = await context.newPage();
   page.setDefaultTimeout(15000);
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith(`/previews/${ID}/${VERSION}/`)) previewRequests.push(request.url()); });
-  await page.goto(base, { waitUntil: 'networkidle' });
-  const card = page.locator(`.pack-card[data-pack="${ID}@${VERSION}"]`);
-  await card.waitFor();
-  assert.equal(await card.locator('.pack-title').innerText(), TITLE);
-  assert.match(await card.locator('.pack-meta').innerText(), /1 ассет/);
-  assert.equal(await card.locator('iframe').count(), 0, 'The card never executes the asset');
-  assert.deepEqual(previewRequests, [], 'No browser preview request before explicit launch');
-  await card.locator('.pack-link').click();
-  const dialog = page.locator('.pack-detail');
-  await dialog.getByRole('button', { name: 'Запустить превью', exact: true }).waitFor();
-  assert.equal(await dialog.locator('iframe').count(), 0);
-  assert.deepEqual(previewRequests, []);
-  await dialog.getByRole('button', { name: 'Запустить превью', exact: true }).click();
-  const iframe = dialog.locator('.detail-frame');
-  await iframe.waitFor();
-  assert.equal(await iframe.getAttribute('sandbox'), 'allow-scripts');
-  assert.equal(await iframe.getAttribute('referrerpolicy'), 'no-referrer');
-  assert.equal(await iframe.getAttribute('src'), pack.previewUrl);
-  frame = await (await iframe.elementHandle()).contentFrame();
-  assert.ok(frame);
+  const renderedResponse = await page.goto(`${base}${pack.previewUrl}`, { waitUntil: 'domcontentloaded' });
+  assert.match(renderedResponse.headers()['content-security-policy'], /sandbox allow-scripts/);
+  assert.doesNotMatch(renderedResponse.headers()['content-security-policy'], /allow-same-origin/);
+  frame = page;
   await frame.locator('#diamond-cuts-v5[data-ready="1"]').waitFor();
-  assert.equal(await frame.evaluate(() => { try { return !!parent.document.body; } catch { return false; } }), false, 'Preview cannot access catalog DOM');
   renderer = await rendered('Initial WebGL rendering');
   assert.match(renderer.version, /WebGL 1/i);
-  assert.equal(previewRequests.length, 1, 'One manual launch creates one preview document');
+  assert.equal(previewRequests.length, 1, 'One explicit QA navigation creates one historical document');
   checks.push(phase);
 
   phase = 'ten-cuts';
@@ -204,7 +188,7 @@ try {
   const beforeDrag = (await rendered('Three-quarter camera returns', state => near(state.rotation, threeQuarter))).rotation;
   const canvas = frame.locator('#diamond-cuts-v5 canvas');
   await canvas.scrollIntoViewIfNeeded();
-  const rect = await canvas.boundingBox(), frameRect = await iframe.boundingBox();
+  const rect = await canvas.boundingBox(), frameRect = { x: 0, y: 0, ...page.viewportSize() };
   assert.ok(rect && frameRect);
   const left = Math.max(rect.x, frameRect.x), right = Math.min(rect.x + rect.width, frameRect.x + frameRect.width);
   const top = Math.max(rect.y, frameRect.y), bottom = Math.min(rect.y + rect.height, frameRect.y + frameRect.height);
@@ -220,7 +204,7 @@ try {
   checks.push(phase);
 
   phase = '390px-contained-preview';
-  await dialog.getByLabel('Мобильное превью', { exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
   await poll('Preview is an actual 390px viewport', async () => await frame.evaluate(() => innerWidth) === 390);
   await rendered('390px canvas remains active');
   await picker.getByRole('button', { name: 'Триллион', exact: true }).click();
@@ -238,19 +222,6 @@ try {
   await sceneShot('visual-weblg-mobile-390');
   checks.push(phase);
 
-  phase = 'close-and-reopen-gate';
-  await dialog.getByRole('button', { name: 'Закрыть пак', exact: true }).click();
-  await dialog.waitFor({ state: 'hidden' });
-  await page.waitForFunction(() => !new URLSearchParams(location.hash.slice(1)).has('pack'));
-  assert.equal(await page.locator('.detail-frame').count(), 0);
-  assert.ok(frame.isDetached(), 'Closing removes the active WebGL browsing context');
-  await card.locator('.pack-link').click();
-  await dialog.getByRole('button', { name: 'Запустить превью', exact: true }).waitFor();
-  assert.equal(await dialog.locator('iframe').count(), 0, 'Reopening does not silently restart WebGL');
-  assert.equal(previewRequests.length, 1);
-  await dialog.getByRole('button', { name: 'Закрыть пак', exact: true }).click();
-  await dialog.waitFor({ state: 'hidden' });
-  checks.push(phase);
   assert.deepEqual(errors, [], 'No uncaught JavaScript errors');
   assert.deepEqual(consoleErrors, [], 'No console errors');
   assert.deepEqual(cspErrors, [], 'No CSP violations');

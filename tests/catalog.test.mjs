@@ -41,6 +41,35 @@ test('catalog boundary is DOM-free, returns the same object and does not mutate 
   assert.deepEqual(pack, original);
 });
 
+test('new folder, autoplay and per-asset URLs validate without changing legacy records', () => {
+  const legacy = validPack();
+  assert.equal(Object.hasOwn(legacy, 'autoplay'), false);
+  assert.equal(Object.hasOwn(legacy.assets[0], 'url'), false);
+  assert.doesNotThrow(() => validatePack(legacy, ORIGIN));
+  const pack = validPack();
+  pack.folder = { id: 'visual', title: 'Visual' };
+  pack.scripts = true; pack.autoplay = true;
+  pack.assets[0].url = '/raw/sample-pack/1.0.0/styles.css';
+  pack.assets[0].previewUrl = '/previews/sample-pack/1.0.0/preview/index.html';
+  const before = structuredClone(pack);
+  assert.strictEqual(validatePack(pack, ORIGIN), pack);
+  assert.deepEqual(pack, before);
+});
+
+test('folder metadata rejects malformed objects, identities, titles and extra fields', () => {
+  for (const value of [null, [], 'visual', {}, { id: 'visual' }, { title: 'Visual' }, { id: '../visual', title: 'Visual' }, { id: 'Visual', title: 'Visual' }, { id: 'a'.repeat(81), title: 'Visual' }, { id: 'visual', title: '' }, { id: 'visual', title: ' Visual' }, { id: 'visual', title: 'a'.repeat(121) }, { id: 'visual', title: 'Bad\u0000title' }, { id: 'visual', title: 'Visual', url: 'https://example.com' }]) {
+    rejects(pack => { pack.folder = value; }, /folder/);
+  }
+});
+
+test('autoplay cannot be truthy metadata or bypass script/review requirements', () => {
+  for (const value of [null, 'true', 'false', 0, 1, {}, []]) rejects(pack => { pack.autoplay = value; }, /autoplay/);
+  rejects(pack => { pack.autoplay = true; }, /autoplay.*scripts/);
+  rejects(pack => { pack.autoplay = true; pack.scripts = true; delete pack.review; }, /autoplay.*review/);
+  const manual = validPack(); manual.autoplay = false; delete manual.review;
+  assert.doesNotThrow(() => validatePack(manual, ORIGIN));
+});
+
 test('catalog boundary accepts real builder output from an isolated temporary fixture', t => {
   const { catalog, cleanup } = createCatalogFixture();
   t.after(cleanup);
@@ -127,6 +156,12 @@ test('raw URLs must correspond to their declared file path, not merely share a p
   }
 });
 
+test('individual asset download URLs must be the exact raw URL of the declared asset path', () => {
+  for (const value of [null, {}, 1, '/raw/sample-pack/1.0.0/styles.css-wrong', '/raw/sample-pack/1.0.0/LICENSE.txt', '/raw/other-pack/1.0.0/styles.css', '/raw/sample-pack/2.0.0/styles.css', '/raw/sample-pack/1.0.0/../styles.css', '/raw/sample-pack/1.0.0/%2e%2e/styles.css', 'https://css.imon.world/raw/sample-pack/1.0.0/styles.css', 'https://example.com/styles.css', '//example.com/styles.css', '/raw/sample-pack/1.0.0/styles.css?x=1', '/raw/sample-pack/1.0.0/styles.css#x']) {
+    rejects(pack => { pack.assets[0].url = value; }, /asset.url/);
+  }
+});
+
 test('unsafe declared paths fail even when the raw URL is changed to match them', () => {
   for (const filename of ['../escape.css', '/root.css', './styles.css', 'nested//styles.css', 'nested/../styles.css', 'nested\\styles.css', '%2e%2e/styles.css', 'styles.css?x=1', 'styles.css#x', 'https://example.com/styles.css', '.env', 'nested/.secret', 'with space.css', 'trailing.', 'a/'.repeat(12) + 'styles.css', 'a'.repeat(241)]) {
     rejects(pack => { pack.files[2].path = filename; pack.files[2].url = `/raw/sample-pack/1.0.0/${filename}`; }, /file.path/);
@@ -137,6 +172,16 @@ test('preview must be an allowlisted HTML file from exactly this pack and versio
   for (const value of ['/previews/sample-pack/1.0.0/missing.html', '/previews/sample-pack/1.0.0/styles.css', '/previews/other-pack/1.0.0/preview/index.html', '/previews/sample-pack/2.0.0/preview/index.html', '/previews/sample-pack/1.0.0/../index.html', '/previews/sample-pack/1.0.0/%2e%2e/index.html', '/previews/sample-pack/1.0.0/preview/index.html?x=1', '/previews/sample-pack/1.0.0/preview/index.html#x', 'https://example.com/index.html', '//example.com/index.html', null, {}]) {
     rejects(pack => { pack.previewUrl = value; }, /previewUrl/);
   }
+});
+
+test('individual preview URLs stay within this exact pack version and its listed HTML files', () => {
+  for (const value of [null, {}, 1, 'preview/index.html', '/previews/sample-pack/1.0.0/missing.html', '/previews/sample-pack/1.0.0/styles.css', '/previews/other-pack/1.0.0/preview/index.html', '/previews/sample-pack/2.0.0/preview/index.html', '/previews/sample-pack/1.0.0/../index.html', '/previews/sample-pack/1.0.0/%2e%2e/index.html', '/previews/sample-pack/1.0.0/preview/index.html?x=1', '/previews/sample-pack/1.0.0/preview/index.html#x', 'https://css.imon.world/previews/sample-pack/1.0.0/preview/index.html', 'https://example.com/index.html', '//example.com/index.html']) {
+    rejects(pack => { pack.assets[0].previewUrl = value; }, /asset.previewUrl/);
+  }
+  const pack = validPack();
+  pack.files.push({ path: 'preview/asset.htm', url: '/raw/sample-pack/1.0.0/preview/asset.htm', size: 12, sha256: HASH });
+  pack.assets[0].previewUrl = '/previews/sample-pack/1.0.0/preview/asset.htm';
+  assert.doesNotThrow(() => validatePack(pack, ORIGIN));
 });
 
 test('file list, sizes, hashes and path identities are validated before rendering', () => {

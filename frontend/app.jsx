@@ -3,26 +3,57 @@ import { createRoot } from 'react-dom/client';
 import { setNonce } from 'get-nonce';
 import { validatePack } from './catalog.mjs';
 import { BrandMark } from './brand.jsx';
+import { LivePreview } from './live-preview.jsx';
 import { Button, Dialog, IconButton, Popover, SegmentedControl, Select, Tabs, TextField, Theme, Tooltip } from '@radix-ui/themes';
-import { ArrowDownIcon, ArrowTopRightIcon, BookmarkFilledIcon, BookmarkIcon, CheckIcon, CodeIcon, CopyIcon, Cross2Icon, DesktopIcon, DownloadIcon, FileTextIcon, GridIcon, MixerHorizontalIcon, MoonIcon, PlusIcon, RowsIcon, MagnifyingGlassIcon, SunIcon } from '@radix-ui/react-icons';
+import { ArrowDownIcon, ArrowTopRightIcon, BookmarkFilledIcon, BookmarkIcon, CheckIcon, CopyIcon, Cross2Icon, DesktopIcon, DownloadIcon, FileTextIcon, GridIcon, MixerHorizontalIcon, MoonIcon, PlusIcon, RowsIcon, MagnifyingGlassIcon, SunIcon } from '@radix-ui/react-icons';
 import '@radix-ui/themes/styles.css';
 import '@fontsource-variable/inter';
 import './styles.css';
 
 const REPOSITORY = 'https://github.com/IMONsergey/imon-design-library';
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const PACK_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*@(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const categoryList = [['design-system', 'Дизайн-системы'], ['components', 'Компоненты'], ['motion', 'Движение'], ['icons', 'Иконки'], ['typography', 'Типографика'], ['guidelines', 'Правила'], ['templates', 'Шаблоны']];
 const categoryName = id => categoryList.find(item => item[0] === id)?.[1] || 'Материалы';
 const pluralRules = new Intl.PluralRules('ru');
-const plural = (count, forms) => `${count} ${forms[{ one: 0, few: 1, many: 2 }[pluralRules.select(count)] ?? 2]}`;
+const plural = (count, forms) => count + ' ' + forms[{ one: 0, few: 1, many: 2 }[pluralRules.select(count)] ?? 2];
 const assetCount = count => plural(count, ['ассет', 'ассета', 'ассетов']);
-const packKey = pack => `${pack.id}@${pack.version}`;
+const packKey = pack => pack.id + '@' + pack.version;
+const packHref = (pack, asset) => '#pack=' + packKey(pack) + (asset ? '&asset=' + asset.id : '');
+const folderHref = id => '#folder=' + id;
 const compareVersion = (a, b) => { const aa = a.version.split('.').map(Number), bb = b.version.split('.').map(Number); for (let i = 0; i < 3; i++) if (aa[i] !== bb[i]) return bb[i] - aa[i]; return 0; };
-const getRoute = () => new URLSearchParams(location.hash.slice(1)).get('pack') || '';
+const termsFor = value => value.toLocaleLowerCase('ru').trim().split(/\s+/).filter(Boolean);
+const matchesTerms = (terms, values) => { const text = values.join(' ').toLocaleLowerCase('ru'); return terms.every(term => text.includes(term)); };
 const readSetting = (name, fallback) => { try { return localStorage.getItem(name) ?? fallback; } catch { return fallback; } };
 function saveSetting(name, value) { try { localStorage.setItem(name, value); return true; } catch { return false; } }
-function readFavorites() { try { const saved = JSON.parse(readSetting('imon-library-favorites', '[]')); return new Set(Array.isArray(saved) ? saved.filter(value => typeof value === 'string' && SLUG.test(value)) : []); } catch { return new Set(); } }
-function bytes(size) { return size < 1024 ? `${size} Б` : size < 1048576 ? `${(size / 1024).toLocaleString('ru', { maximumFractionDigits: 1 })} КБ` : `${(size / 1048576).toLocaleString('ru', { maximumFractionDigits: 1 })} МБ`; }
+function readFavorites() { try { const values = JSON.parse(readSetting('imon-library-favorites', '[]')); return new Set(Array.isArray(values) ? values.filter(value => typeof value === 'string' && SLUG.test(value)) : []); } catch { return new Set(); } }
+function bytes(size) { return size < 1024 ? size + ' Б' : size < 1048576 ? (size / 1024).toLocaleString('ru', { maximumFractionDigits: 1 }) + ' КБ' : (size / 1048576).toLocaleString('ru', { maximumFractionDigits: 1 }) + ' МБ'; }
+function readRoute() {
+  const hash = location.hash, params = new URLSearchParams(hash.slice(1));
+  const key = params.get('pack'), assetId = params.get('asset'), folderId = params.get('folder');
+  if (key && PACK_KEY.test(key) && (!assetId || SLUG.test(assetId))) return { kind: assetId ? 'asset' : 'collection', key, assetId, hash };
+  if (key || assetId) return { kind: 'missing', hash };
+  if (folderId && SLUG.test(folderId)) return { kind: 'folder', folderId, hash };
+  if (params.get('view') === 'favorites') return { kind: 'favorites', hash };
+  if (!hash || hash === '#' || hash === '#catalog') return { kind: 'all', hash };
+  return { kind: 'missing', hash };
+}
+function safeSource(value) { try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; } catch { return ''; } }
+function fileFor(pack, asset) { return pack.files.find(file => file.path === asset.path); }
+function previewFor(pack, asset) {
+  const prefix = '/previews/' + pack.id + '/' + pack.version + '/';
+  if (typeof asset.previewUrl === 'string' && pack.files.some(file => prefix + file.path === asset.previewUrl)) return asset.previewUrl;
+  return !asset.previewUrl && pack.assets.length === 1 ? pack.previewUrl : null;
+}
+function contextFor(pack, asset) {
+  const selected = asset ? [asset] : pack.assets;
+  return ['I’MON Design Library: ' + REPOSITORY, 'Коллекция: ' + pack.title, 'Пак: ' + pack.id, 'Версия: ' + pack.version,
+    ...(pack.folder ? ['Папка: ' + pack.folder.title] : []), ...(asset ? ['Ассет: ' + asset.title, 'Файл: ' + asset.path] : []),
+    'Ссылка: ' + location.origin + '/' + packHref(pack, asset), 'Исходники: packs/' + pack.id + '/' + pack.version + '/',
+    'Манифест: ' + location.origin + pack.manifestUrl, 'Лицензия: ' + pack.license.id, '',
+    'Прочитай AGENTS.md, manifest.json и README. Используй только выбранную коллекцию, не смешивай ее стили с другими системами. Проверь лицензию перед интеграцией.',
+    '', ...selected.map(item => '- ' + item.title + ': ' + item.path)].join('\n');
+}
 const nonce = document.querySelector('meta[name="csp-nonce"]')?.content;
 if (nonce && nonce !== '__IMON_CSP_NONCE__') setNonce(nonce);
 
@@ -31,8 +62,14 @@ function useAppearance() {
   const [systemDark, setSystemDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches);
   const appearance = choice === 'system' ? systemDark ? 'dark' : 'light' : choice;
   useEffect(() => { const media = matchMedia('(prefers-color-scheme: dark)'); const changed = event => setSystemDark(event.matches); media.addEventListener('change', changed); return () => media.removeEventListener('change', changed); }, []);
-  useEffect(() => { document.documentElement.dataset.theme = appearance; document.documentElement.style.colorScheme = appearance; document.documentElement.classList.toggle('dark', appearance === 'dark'); document.documentElement.classList.toggle('light', appearance === 'light'); document.querySelector('meta[name="theme-color"]')?.setAttribute('content', appearance === 'dark' ? '#111111' : '#fafafa'); }, [appearance]);
-  const choose = value => { if (!['light', 'dark', 'system'].includes(value)) return; saveSetting('imon-library-theme', value); setChoice(value); };
+  useEffect(() => {
+    document.documentElement.dataset.theme = appearance;
+    document.documentElement.style.colorScheme = appearance;
+    document.documentElement.classList.toggle('dark', appearance === 'dark');
+    document.documentElement.classList.toggle('light', appearance === 'light');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', appearance === 'dark' ? '#111111' : '#fafafa');
+  }, [appearance]);
+  const choose = value => { if (['light', 'dark', 'system'].includes(value)) { saveSetting('imon-library-theme', value); setChoice(value); } };
   return { appearance, choice, choose };
 }
 function ThemeSwitch({ value, onChange }) {
@@ -42,144 +79,263 @@ function ThemeSwitch({ value, onChange }) {
     <SegmentedControl.Item value="system" aria-label="Системная тема" title="Как на устройстве"><DesktopIcon /></SegmentedControl.Item>
   </SegmentedControl.Root>;
 }
-function Toast({ message }) { return <div className="toast-region" aria-live="polite" aria-atomic="true">{message && <div className="toast" role="status"><CheckIcon />{message}</div>}</div>; }
-
-const PackCover = memo(function PackCover({ pack }) {
-  const host = useRef(null);
-  const [scale, setScale] = useState(0.5);
-  useEffect(() => { const node = host.current; if (!node || pack.scripts) return; const observer = new ResizeObserver(entries => setScale(entries[0].contentRect.width / 720)); observer.observe(node); return () => observer.disconnect(); }, [pack.scripts]);
-  return <div className="pack-cover" ref={host} aria-hidden="true" inert>
-    {pack.scripts ? <div className="script-cover"><CodeIcon /><span>Интерактивный пак</span><small>Запуск внутри превью</small></div> : <div className="cover-viewport"><iframe key={packKey(pack)} title={`Превью ${pack.title}`} sandbox="" src={pack.previewUrl} referrerPolicy="no-referrer" loading="lazy" tabIndex={-1} style={{ width: 720, height: 480, transform: `scale(${scale})` }} /></div>}
-    <div className="cover-overlay"><span>Открыть пак <ArrowTopRightIcon /></span></div>
-  </div>;
-});
-const PackCard = memo(function PackCard({ pack, saved, onOpen, onFavorite }) {
+function Toast({ message }) { return <div className="toast-region" aria-live="polite" aria-atomic="true">{message && <div className="toast" role="status"><CheckIcon /><span>{message}</span></div>}</div>; }
+function FolderSymbol() { return <svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 3.25h3.1l1.3 1.5h6.6v7a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-7.5a1 1 0 0 1 1-1Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>; }
+function PageLink({ href, navigate, beforeNavigate, children, ...props }) {
+  return <a {...props} href={href || '/'} onClick={event => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault(); beforeNavigate?.(); navigate(href);
+  }}>{children}</a>;
+}
+function Breadcrumbs({ items, navigate }) {
+  if (!items.length) return null;
+  return <nav className="breadcrumbs" aria-label="Хлебные крошки"><ol>{items.map((item, index) => <li key={index}>
+    {index > 0 && <span className="breadcrumb-divider" aria-hidden="true">/</span>}
+    {item.href === undefined ? <span aria-current="page">{item.title}</span> : <PageLink href={item.href} navigate={navigate}>{item.title}</PageLink>}
+  </li>)}</ol></nav>;
+}
+function SearchField({ value, onChange, inputRef, collection = false }) {
+  const label = collection ? 'Поиск по коллекции' : 'Поиск по библиотеке';
+  return <TextField.Root className="catalog-search" ref={inputRef} aria-label={label} placeholder={label} value={value} onChange={event => onChange(event.target.value)} size="3">
+    <TextField.Slot><MagnifyingGlassIcon /></TextField.Slot>
+    <TextField.Slot>{value ? <IconButton variant="ghost" size="1" color="gray" aria-label="Очистить поиск" onClick={() => { onChange(''); inputRef.current?.focus(); }}><Cross2Icon /></IconButton> : <kbd>/</kbd>}</TextField.Slot>
+  </TextField.Root>;
+}
+function FavoriteButton({ pack, saved, onFavorite, className = 'bookmark' }) {
+  return <Tooltip content={saved ? 'Убрать из избранного' : 'Сохранить коллекцию'}><IconButton className={className + (saved ? ' is-saved' : '')} variant="ghost" color="gray" size="2" aria-label={(saved ? 'Убрать из избранного: ' : 'В избранное: ') + pack.title} aria-pressed={saved} onClick={() => onFavorite(pack.id)}>{saved ? <BookmarkFilledIcon /> : <BookmarkIcon />}</IconButton></Tooltip>;
+}
+const PackCard = memo(function PackCard({ pack, saved, navigate, onFavorite }) {
   return <article className="pack-card" data-pack={packKey(pack)}>
-    <a className="pack-link" href={`#pack=${packKey(pack)}`} onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); onOpen(pack, event.currentTarget); }}>
-      <PackCover pack={pack} />
-      <div className="pack-body"><p className="pack-category">{categoryName(pack.category)}</p><h2 className="pack-title">{pack.title}</h2><p className="pack-summary">{pack.summary}</p><div className="pack-meta"><span>{assetCount(pack.assets.length)}</span><span className="meta-separator">/</span><span className="version">v{pack.version}</span><span className="open-hint"><ArrowTopRightIcon /></span></div></div>
-    </a>
-    <Tooltip content={saved ? 'Убрать из избранного' : 'Сохранить в избранное'}><IconButton className={`bookmark${saved ? ' is-saved' : ''}`} variant="ghost" color="gray" size="2" aria-label={`${saved ? 'Убрать из избранного' : 'В избранное'}: ${pack.title}`} aria-pressed={saved} onClick={() => onFavorite(pack.id)}>{saved ? <BookmarkFilledIcon /> : <BookmarkIcon />}</IconButton></Tooltip>
+    <PageLink className="pack-link" href={packHref(pack)} navigate={navigate}>
+      <div className="pack-cover"><LivePreview src={pack.previewUrl} title={'Превью ' + pack.title} scripts={pack.scripts} autoplay={pack.autoplay === true} interactive={false} /></div>
+      <div className="pack-body"><p className="pack-category">{pack.folder?.title || categoryName(pack.category)}</p><h2 className="pack-title">{pack.title}</h2><p className="pack-summary">{pack.summary}</p><div className="pack-meta"><span>{assetCount(pack.assets.length)}</span><span className="meta-separator">/</span><span className="version">v{pack.version}</span><span className="open-hint"><ArrowTopRightIcon /></span></div></div>
+    </PageLink>
+    <FavoriteButton pack={pack} saved={saved} onFavorite={onFavorite} />
   </article>;
 });
 function FilterMenu({ category, setCategory, tag, setTag, packs, clear }) {
+  const categories = categoryList.filter(([id]) => packs.some(pack => pack.category === id));
   const tags = useMemo(() => [...new Set(packs.filter(pack => category === 'all' || pack.category === category).flatMap(pack => pack.tags))].sort((a, b) => a.localeCompare(b, 'ru')), [category, packs]);
   const count = Number(category !== 'all') + Number(!!tag);
   return <Popover.Root><Popover.Trigger><Button className="filter-button" variant="surface" color="gray" size="2"><MixerHorizontalIcon />Фильтры{count > 0 && <span className="filter-count">{count}</span>}</Button></Popover.Trigger><Popover.Content className="filter-popover" width="300" align="end">
     <div className="popover-heading"><strong>Фильтры</strong>{count > 0 && <Button variant="ghost" color="gray" size="1" onClick={clear}>Сбросить</Button>}</div>
-    <label className="field-label" id="category-label">Категория</label><Select.Root value={category} onValueChange={value => { setCategory(value); setTag(''); }}><Select.Trigger aria-labelledby="category-label" className="category-select" /><Select.Content position="popper"><Select.Item value="all">Все категории</Select.Item>{categoryList.map(([id, title]) => <Select.Item key={id} value={id}>{title} · {packs.filter(pack => pack.category === id).length}</Select.Item>)}</Select.Content></Select.Root>
-    <span className="field-label tag-label">Теги</span><div className="filter-tags">{tags.length ? tags.slice(0, 40).map(name => <button className={`filter-tag${tag === name ? ' is-active' : ''}`} aria-pressed={tag === name} onClick={() => setTag(tag === name ? '' : name)} key={name}>{name}</button>) : <p className="muted-copy">В этой категории пока нет паков.</p>}</div>
+    <label className="field-label" id="category-label">Категория</label><Select.Root value={category} onValueChange={value => { setCategory(value); setTag(''); }}><Select.Trigger aria-labelledby="category-label" className="category-select" /><Select.Content position="popper"><Select.Item value="all">Все категории</Select.Item>{categories.map(([id, title]) => <Select.Item key={id} value={id}>{title} · {packs.filter(pack => pack.category === id).length}</Select.Item>)}</Select.Content></Select.Root>
+    <span className="field-label tag-label">Теги</span><div className="filter-tags">{tags.length ? tags.slice(0, 40).map(name => <button className={'filter-tag' + (tag === name ? ' is-active' : '')} aria-pressed={tag === name} onClick={() => setTag(tag === name ? '' : name)} key={name}>{name}</button>) : <p className="muted-copy">В этой категории пока нет тегов.</p>}</div>
   </Popover.Content></Popover.Root>;
 }
 
-function PackDialog({ pack, versions, open, onClose, onVersion, returnFocus, notify, toast }) {
-  const [tab, setTab] = useState('preview');
-  const [width, setWidth] = useState('desktop');
-  const [launchedKey, setLaunchedKey] = useState('');
-  const [filePath, setFilePath] = useState('');
-  const [fileState, setFileState] = useState({ status: 'idle', text: '' });
+function FileBrowser({ pack, files = pack.files, notify }) {
+  const [filePath, setFilePath] = useState(() => files.find(file => /README\.md$/i.test(file.path))?.path || files[0]?.path || '');
+  const [state, setState] = useState({ status: 'idle', url: '', text: '' });
   const [retry, setRetry] = useState(0);
-  const titleRef = useRef(null);
-  const key = pack ? packKey(pack) : '';
-  useEffect(() => { setTab('preview'); setWidth('desktop'); setLaunchedKey(''); setFileState({ status: 'idle', text: '' }); setFilePath(pack?.files.find(file => /\.(css|js|json|html)$/i.test(file.path))?.path || pack?.files[0]?.path || ''); }, [key, open]);
-  const file = pack?.files.find(item => item.path === filePath);
+  const file = files.find(item => item.path === filePath) || files[0];
   useEffect(() => {
-    if (!open || tab !== 'files' || !file) return;
-    if (!/\.(?:html?|css|m?js|json|svg|txt|md)$/i.test(file.path) || file.size > 524288) { setFileState({ status: 'binary', text: '' }); return; }
-    const controller = new AbortController(); setFileState({ status: 'loading', text: '' });
-    fetch(file.url, { signal: controller.signal }).then(response => { if (!response.ok) throw new Error('Файл недоступен'); return response.text(); }).then(text => { if (controller.signal.aborted) return; if (text.length > 524288) throw new Error('Файл слишком большой'); setFileState({ status: 'ready', text }); }).catch(() => { if (!controller.signal.aborted) setFileState({ status: 'error', text: '' }); });
+    if (!file) return;
+    if (!/\.(?:html?|css|m?js|json|svg|txt|md)$/i.test(file.path) || file.size > 524288) { setState({ status: 'binary', url: file.url, text: '' }); return; }
+    const controller = new AbortController();
+    setState({ status: 'loading', url: file.url, text: '' });
+    fetch(file.url, { signal: controller.signal, redirect: 'error' }).then(response => { if (!response.ok) throw new Error('Unavailable'); return response.text(); }).then(text => {
+      if (controller.signal.aborted) return;
+      if (text.length > 524288) throw new Error('Too large');
+      setState({ status: 'ready', url: file.url, text });
+    }).catch(() => { if (!controller.signal.aborted) setState({ status: 'error', url: file.url, text: '' }); });
     return () => controller.abort();
-  }, [key, open, tab, filePath, retry]);
-  if (!pack) return null;
-  const lines = fileState.status === 'ready' ? fileState.text.split('\n').length : 0;
-  return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}><Dialog.Content className="pack-detail" maxWidth="none" onOpenAutoFocus={event => { event.preventDefault(); titleRef.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); returnFocus(); }}>
-    <div className="detail-header"><div className="detail-title-block"><p className="detail-pretitle">{categoryName(pack.category)}</p><Dialog.Title ref={titleRef} tabIndex={-1} className="detail-title">{pack.title}</Dialog.Title><Dialog.Description className="detail-description">{pack.summary}</Dialog.Description></div><div className="detail-header-actions"><Select.Root value={pack.version} onValueChange={onVersion}><Select.Trigger aria-label="Версия пака" variant="surface" /><Select.Content position="popper">{versions.map(item => <Select.Item key={item.version} value={item.version}>v{item.version}</Select.Item>)}</Select.Content></Select.Root><Dialog.Close><IconButton variant="ghost" color="gray" size="2" aria-label="Закрыть пак"><Cross2Icon /></IconButton></Dialog.Close></div></div>
-    <div className="detail-workspace"><Tabs.Root className="detail-tabs-root" value={tab} onValueChange={setTab}>
-      <div className="detail-toolbar"><Tabs.List className="detail-tabs" aria-label="Содержание пака"><Tabs.Trigger value="preview">Превью</Tabs.Trigger><Tabs.Trigger value="files">Файлы и код</Tabs.Trigger><Tabs.Trigger value="guide">Правила</Tabs.Trigger></Tabs.List><div className="detail-actions"><Button asChild variant="solid" highContrast size="2"><a href={pack.downloadUrl} download={`${pack.id}-${pack.version}.zip`}><DownloadIcon />Скачать пак<span className="download-size">{bytes(pack.downloadSize)}</span></a></Button></div></div>
-      <Tabs.Content className="preview-panel" value="preview"><div className="preview-controls"><span className="preview-caption">Оригинальное оформление пака</span><SegmentedControl.Root size="1" value={width} onValueChange={setWidth} aria-label="Ширина превью"><SegmentedControl.Item value="desktop" aria-label="Широкое превью"><DesktopIcon /></SegmentedControl.Item><SegmentedControl.Item value="mobile" aria-label="Мобильное превью">390</SegmentedControl.Item></SegmentedControl.Root></div><div className="preview-canvas" data-width={width}>{pack.scripts && launchedKey !== key ? <div className="launch-preview"><CodeIcon /><h3>Интерактивное превью</h3><p>В этом паке есть JavaScript. Он запускается отдельно от каталога, с ограниченным доступом к браузеру и сети.</p><Button onClick={() => setLaunchedKey(key)} highContrast>Запустить превью</Button></div> : open && <iframe key={key} className="detail-frame" src={pack.previewUrl} sandbox={pack.scripts ? 'allow-scripts' : ''} referrerPolicy="no-referrer" title={`Интерактивное превью ${pack.title}`} />}</div><p className="preview-footnote">Превью изолировано. Тема каталога не меняет дизайн самого пака.</p></Tabs.Content>
-      <Tabs.Content value="files" className="files-panel"><nav className="file-nav" aria-label="Файлы пака"><div className="file-nav-heading">Файлы <span>{pack.files.length}</span></div>{pack.files.map(item => <button key={item.path} className={`file-item${filePath === item.path ? ' is-active' : ''}`} title={item.path} aria-pressed={filePath === item.path} onClick={() => setFilePath(item.path)}><FileTextIcon /><span>{item.path}</span><small>{bytes(item.size)}</small></button>)}</nav><div className="code-column"><div className="code-header"><span className="code-filename">{file?.path || 'Файл не выбран'}</span><div className="code-actions">{file && <Tooltip content="Скачать файл"><IconButton asChild variant="ghost" color="gray" size="1"><a href={file.url} download={file.path.split('/').at(-1)} aria-label="Скачать файл"><ArrowDownIcon /></a></IconButton></Tooltip>}<Button variant="surface" color="gray" size="1" disabled={fileState.status !== 'ready'} onClick={() => notify(fileState.text, true)}><CopyIcon />Копировать</Button></div></div>
-        {fileState.status === 'ready' ? <div className="code-scroll" tabIndex={0} aria-label={`Код файла ${file?.path}`}><pre className="code-lines" aria-hidden="true">{Array.from({ length: Math.min(lines, 10000) }, (_, index) => index + 1).join('\n')}</pre><pre className="code-source"><code>{fileState.text}</code></pre></div> : <div className="code-placeholder">{fileState.status === 'loading' ? <><span className="loading-indicator" />Загружаем файл</> : fileState.status === 'error' ? <><p>Не удалось открыть файл.</p><Button size="1" variant="outline" onClick={() => setRetry(value => value + 1)}>Повторить</Button></> : fileState.status === 'binary' ? <><FileTextIcon /><p>{file?.size > 524288 ? 'Большой файл удобнее открыть после скачивания.' : 'Этот файл доступен в оригинальном формате.'}</p>{file && <Button asChild variant="surface" size="2"><a href={file.url} download>Скачать файл</a></Button>}</> : 'Выбери файл слева.'}</div>}
-        <div className="code-meta"><span>{file ? bytes(file.size) : ''}{lines > 0 ? ` · ${plural(lines, ['строка', 'строки', 'строк'])}` : ''}</span><span title={file?.sha256}>SHA-256 {file?.sha256?.slice(0, 12)}…</span></div></div></Tabs.Content>
-      <Tabs.Content value="guide" className="guide-panel"><div className="guide-main"><h3>Что внутри</h3>{pack.assets.map(asset => <article className="guide-asset" key={asset.id || asset.path}><div className="guide-asset-heading"><h4>{asset.title}</h4><span>{asset.path}</span></div><p>{asset.description}</p><pre>{asset.usage}</pre></article>)}</div><aside className="guide-aside"><h3>О паке</h3><dl><dt>Автор</dt><dd>{pack.source?.author || 'Не указан'}</dd><dt>Лицензия</dt><dd>{pack.license.id}</dd><dt>Проверка</dt><dd>{pack.review?.date || 'Не указана'}</dd><dt>Версия</dt><dd>{pack.version}</dd></dl><p>Условия лицензии сохраняются при использовании. Публикация в каталоге не делает материал свободным.</p>{safeSource(pack.source?.url) && <a href={safeSource(pack.source.url)} target="_blank" rel="noopener noreferrer" className="text-link">Первоисточник <ArrowTopRightIcon /></a>}</aside></Tabs.Content>
-    </Tabs.Root></div><div className="detail-footer"><span>{assetCount(pack.assets.length)}<span className="meta-separator">/</span>{plural(pack.files.length, ['файл', 'файла', 'файлов'])}</span><Button className="copy-context" variant="ghost" color="gray" size="1" onClick={() => notify(contextFor(pack), true)}><CopyIcon />Контекст для чата</Button></div><Toast message={toast} />
-  </Dialog.Content></Dialog.Root>;
+  }, [file?.url, retry]);
+  const current = state.url === file?.url ? state : { status: 'loading', text: '' };
+  const lines = current.status === 'ready' ? current.text.split('\n').length : 0;
+  return <div className={'files-panel' + (files.length === 1 ? ' single-file' : '')}>
+    {files.length > 1 && <nav className="file-nav" aria-label="Файлы коллекции"><div className="file-nav-heading">Файлы <span>{files.length}</span></div>{files.map(item => <button key={item.path} className={'file-item' + (file?.path === item.path ? ' is-active' : '')} title={item.path} aria-pressed={file?.path === item.path} onClick={() => setFilePath(item.path)}><FileTextIcon /><span>{item.path}</span><small>{bytes(item.size)}</small></button>)}</nav>}
+    <div className="code-column"><div className="code-header"><span className="code-filename">{file?.path || 'Файл не выбран'}</span><div className="code-actions">
+      {file && <Tooltip content="Скачать файл"><IconButton asChild variant="ghost" color="gray" size="1"><a href={file.url} download={file.path.split('/').at(-1)} aria-label="Скачать файл"><ArrowDownIcon /></a></IconButton></Tooltip>}
+      <Button variant="surface" color="gray" size="1" disabled={current.status !== 'ready'} onClick={() => notify(current.text, true)}><CopyIcon />Копировать</Button>
+    </div></div>
+    {current.status === 'ready' ? <div className="code-scroll" tabIndex={0} aria-label={'Код файла ' + file.path}><pre className="code-lines" aria-hidden="true">{Array.from({ length: Math.min(lines, 10000) }, (_, index) => index + 1).join('\n')}</pre><pre className="code-source"><code>{current.text}</code></pre></div>
+      : <div className="code-placeholder">{current.status === 'loading' ? 'Загружаем файл' : current.status === 'error' ? <><p>Не удалось открыть файл.</p><Button size="1" variant="outline" onClick={() => setRetry(value => value + 1)}>Повторить</Button></> : current.status === 'binary' ? <><FileTextIcon /><p>Этот файл удобнее открыть после скачивания.</p>{file && <Button asChild variant="surface" size="2"><a href={file.url} download>Скачать файл</a></Button>}</> : 'Файл не выбран'}</div>}
+    <div className="code-meta"><span>{file ? bytes(file.size) : ''}{lines > 0 ? ' · ' + plural(lines, ['строка', 'строки', 'строк']) : ''}</span><span title={file?.sha256}>SHA-256 {file?.sha256?.slice(0, 12)}…</span></div></div>
+  </div>;
 }
-function safeSource(value) { try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; } catch { return ''; } }
-function contextFor(pack) { return [`I’MON Design Library: ${REPOSITORY}`, `Пак: ${pack.id}`, `Версия: ${pack.version}`, `Ссылка: ${location.origin}/#pack=${packKey(pack)}`, `Исходники: packs/${pack.id}/${pack.version}/`, `Манифест: ${location.origin}${pack.manifestUrl}`, `Лицензия: ${pack.license.id}`, '', 'Прочитай AGENTS.md, manifest.json и README пака. Используй только выбранный пак, не смешивай его стили с другими системами. Проверь лицензию и зависимости перед интеграцией.', '', ...pack.assets.map(asset => `- ${asset.title}: ${asset.path}`)].join('\n'); }
+function PackGuide({ pack, notify }) {
+  return <section className="pack-guide" aria-label="Правила коллекции"><div className="guide-provenance"><h2>О коллекции</h2><dl><div><dt>Автор</dt><dd>{pack.source?.author || 'Не указан'}</dd></div><div><dt>Лицензия</dt><dd>{pack.license.id}</dd></div><div><dt>Проверка</dt><dd>{pack.review?.date || 'Не указана'}</dd></div><div><dt>Версия</dt><dd>{pack.version}</dd></div></dl><p>Условия лицензии сохраняются при использовании. Публикация в каталоге не делает материал свободным.</p>{safeSource(pack.source?.url) && <a className="text-link" href={safeSource(pack.source.url)} target="_blank" rel="noopener noreferrer">Первоисточник <ArrowTopRightIcon /></a>}</div>
+    <div className="guide-assets"><h2>Использование</h2>{pack.assets.map(asset => <article className="guide-asset" key={asset.id}><h3>{asset.title}</h3><p>{asset.description}</p><pre className="usage-text">{asset.usage}</pre></article>)}</div>
+    <Button className="copy-context" variant="surface" color="gray" size="2" onClick={() => notify(contextFor(pack), true)}><CopyIcon />Контекст для чата</Button>
+  </section>;
+}
+const AssetCard = memo(function AssetCard({ pack, asset, navigate, notify }) {
+  const file = fileFor(pack, asset);
+  return <article className="asset-card" data-asset={asset.id}>
+    <div className="asset-preview"><LivePreview src={previewFor(pack, asset)} title={pack.title + ' / ' + asset.title} scripts={pack.scripts} autoplay={pack.autoplay === true} /></div>
+    <div className="asset-card-body"><h2><PageLink className="asset-link" href={packHref(pack, asset)} navigate={navigate}>{asset.title}<ArrowTopRightIcon aria-hidden="true" /></PageLink></h2>
+      <div className="asset-card-actions"><Button variant="ghost" color="gray" size="1" aria-label={'Контекст для чата: ' + asset.title} onClick={() => notify(contextFor(pack, asset), true)}><CopyIcon />Контекст</Button>
+        {file && <a className="asset-download" href={file.url} download={file.path.split('/').at(-1)} aria-label={'Скачать ассет: ' + asset.title}><DownloadIcon />Скачать</a>}
+      </div>
+    </div>
+  </article>;
+});
+function CollectionPage({ pack, navigate, notify, query, setQuery, searchRef }) {
+  const [tab, setTab] = useState('assets');
+  const terms = termsFor(query);
+  const assets = pack.assets.filter(asset => matchesTerms(terms, [asset.id, asset.title, asset.description, asset.usage]));
+  return <section className="collection-page" data-pack={packKey(pack)}>
+    <p className="page-description">{pack.summary}</p>
+    <Tabs.Root className="collection-tabs-root" value={tab} onValueChange={setTab}>
+      <div className="page-tabs-row"><Tabs.List className="page-tabs" aria-label="Содержимое коллекции"><Tabs.Trigger value="assets">Ассеты</Tabs.Trigger><Tabs.Trigger value="files">Файлы и правила</Tabs.Trigger></Tabs.List>
+        <Button className="copy-context" variant="ghost" color="gray" size="1" onClick={() => notify(contextFor(pack), true)}><CopyIcon />Контекст для чата</Button>
+      </div>
+      <Tabs.Content value="assets" className="collection-assets">
+        <div className="asset-toolbar"><SearchField value={query} onChange={setQuery} inputRef={searchRef} collection /><span className="asset-results-count" aria-live="polite">{assetCount(assets.length)}</span></div>
+        {assets.length ? <div className="asset-grid">{assets.map(asset => <AssetCard key={asset.id} pack={pack} asset={asset} navigate={navigate} notify={notify} />)}</div>
+          : <div className="empty-state"><h2>Ничего не нашлось</h2><p>Попробуй другое название или очисти поиск.</p><Button variant="surface" onClick={() => setQuery('')}>Сбросить поиск</Button></div>}
+      </Tabs.Content>
+      <Tabs.Content value="files" className="collection-files"><FileBrowser pack={pack} notify={notify} /><PackGuide pack={pack} notify={notify} /></Tabs.Content>
+    </Tabs.Root>
+  </section>;
+}
+function AssetPage({ pack, asset, navigate, notify }) {
+  const file = fileFor(pack, asset), index = pack.assets.findIndex(item => item.id === asset.id);
+  return <section className="asset-page" data-pack={packKey(pack)} data-asset={asset.id}>
+    <p className="page-description">{asset.description}</p>
+    <div className="asset-detail-grid">
+      <div className="asset-visual-column"><div className="asset-detail-preview"><LivePreview src={previewFor(pack, asset)} title={pack.title + ' / ' + asset.title} scripts={pack.scripts} autoplay={pack.autoplay === true} /></div>
+        <nav className="asset-pagination" aria-label="Другие ассеты">{index > 0 ? <PageLink href={packHref(pack, pack.assets[index - 1])} navigate={navigate}>← {pack.assets[index - 1].title}</PageLink> : <span />}
+          <span>{index + 1} / {pack.assets.length}</span>{index < pack.assets.length - 1 ? <PageLink href={packHref(pack, pack.assets[index + 1])} navigate={navigate}>{pack.assets[index + 1].title} →</PageLink> : <span />}
+        </nav>
+      </div>
+      <Tabs.Root className="asset-reference" defaultValue="usage"><Tabs.List className="page-tabs" aria-label="Данные ассета"><Tabs.Trigger value="usage">Инструкция</Tabs.Trigger><Tabs.Trigger value="source">Исходник</Tabs.Trigger></Tabs.List>
+        <Tabs.Content value="usage" className="asset-usage"><h2>Как использовать</h2><pre className="usage-text">{asset.usage}</pre><dl className="asset-facts"><div><dt>Файл</dt><dd>{asset.path}</dd></div><div><dt>Лицензия</dt><dd>{pack.license.id}</dd></div><div><dt>Автор</dt><dd>{pack.source?.author || 'Не указан'}</dd></div></dl>
+          <Button className="copy-context" variant="surface" color="gray" size="2" onClick={() => notify(contextFor(pack, asset), true)}><CopyIcon />Контекст для чата</Button>
+          <a className="collection-archive-link text-link" href={pack.downloadUrl} download={pack.id + '-' + pack.version + '.zip'}>Скачать коллекцию <ArrowDownIcon /></a>
+        </Tabs.Content>
+        <Tabs.Content value="source" className="asset-source">{file ? <FileBrowser pack={pack} files={[file]} notify={notify} /> : <p className="muted-copy">Исходник недоступен.</p>}</Tabs.Content>
+      </Tabs.Root>
+    </div>
+  </section>;
+}
 function AddDialog({ open, onOpenChange, notify, toast, triggerLabel = 'Добавить' }) {
-  const prompt = `Добавь этот материал в I’MON Design Library (${REPOSITORY}). Создай отдельный пак или используй указанный мной. Проверь источник и права, подготовь изолированное превью и инструкцию. Не смешивай разные дизайн-системы. Сначала прочитай AGENTS.md и docs/ADDING_ASSETS.md. Публикуй только материалы, которые разрешено раскрывать.`;
-  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Trigger><Button className="add-pack" highContrast size="2"><PlusIcon /><span>{triggerLabel}</span></Button></Dialog.Trigger><Dialog.Content className="add-dialog" maxWidth="520px"><div className="add-dialog-header"><span className="dialog-kicker">Пополнение библиотеки</span><Dialog.Close><IconButton variant="ghost" color="gray" aria-label="Закрыть инструкцию"><Cross2Icon /></IconButton></Dialog.Close></div><Dialog.Title size="6">Добавление через чат</Dialog.Title><Dialog.Description className="add-description">Передай файл или ссылку в чат с доступом к этому репозиторию. Укажи, в какой пак сохранить материал.</Dialog.Description><ol className="howto-steps"><li><span>01</span><div><strong>Прикрепи материал</strong><p>Код, компонент, набор иконок или правила.</p></div></li><li><span>02</span><div><strong>Укажи пак</strong><p>Существующий или новый, отдельно от других систем.</p></div></li><li><span>03</span><div><strong>Проверь результат</strong><p>Превью, инструкцию, источник и права на использование.</p></div></li></ol><p className="privacy-note">Сайт и репозиторий публичные. Закрытые клиентские материалы сюда не добавляем.</p><div className="add-dialog-footer"><Button highContrast onClick={() => notify(prompt, true)}><CopyIcon />Копировать запрос</Button><a className="text-link" href={`${REPOSITORY}/blob/main/docs/ADDING_ASSETS.md`} target="_blank" rel="noopener noreferrer">Инструкция <ArrowTopRightIcon /></a></div><Toast message={toast} /></Dialog.Content></Dialog.Root>;
+  const prompt = 'Добавь этот материал в I’MON Design Library (' + REPOSITORY + '). Укажи папку и коллекцию. Проверь источник и права, подготовь изолированное превью и инструкцию. Не смешивай разные дизайн-системы. Сначала прочитай AGENTS.md и docs/ADDING_ASSETS.md. Публикуй только материалы, которые разрешено раскрывать.';
+  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Trigger><Button className="add-pack" highContrast size="2"><PlusIcon /><span>{triggerLabel}</span></Button></Dialog.Trigger><Dialog.Content className="add-dialog" maxWidth="520px"><div className="add-dialog-header"><span className="dialog-kicker">Пополнение библиотеки</span><Dialog.Close><IconButton variant="ghost" color="gray" aria-label="Закрыть инструкцию"><Cross2Icon /></IconButton></Dialog.Close></div><Dialog.Title size="6">Добавление через чат</Dialog.Title><Dialog.Description className="add-description">Передай файл или ссылку в чат с доступом к этому репозиторию. Укажи папку и коллекцию для материала.</Dialog.Description><ol className="howto-steps"><li><span>01</span><div><strong>Прикрепи материал</strong><p>Код, компонент, набор иконок или правила.</p></div></li><li><span>02</span><div><strong>Выбери коллекцию</strong><p>Существующую или новую, отдельно от других систем.</p></div></li><li><span>03</span><div><strong>Проверь результат</strong><p>Превью, инструкцию, источник и права на использование.</p></div></li></ol><p className="privacy-note">Сайт и репозиторий публичные. Закрытые клиентские материалы сюда не добавляем.</p><div className="add-dialog-footer"><Button highContrast onClick={() => notify(prompt, true)}><CopyIcon />Копировать запрос</Button><a className="text-link" href={REPOSITORY + '/blob/main/docs/ADDING_ASSETS.md'} target="_blank" rel="noopener noreferrer">Инструкция <ArrowTopRightIcon /></a></div><Toast message={toast} /></Dialog.Content></Dialog.Root>;
 }
 
 function App() {
   const { appearance, choice, choose } = useAppearance();
-  const [compact, setCompact] = useState(() => matchMedia('(max-width: 680px)').matches);
-  useEffect(() => { const media = matchMedia('(max-width: 680px)'); const changed = event => setCompact(event.matches); media.addEventListener('change', changed); return () => media.removeEventListener('change', changed); }, []);
-  const [catalog, setCatalog] = useState([]);
-  const [load, setLoad] = useState('loading');
-  const [attempt, setAttempt] = useState(0);
-  const [collection, setCollection] = useState('all');
-  const [category, setCategory] = useState('all');
-  const [tag, setTag] = useState('');
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState('title');
+  const [catalog, setCatalog] = useState([]), [load, setLoad] = useState('loading'), [attempt, setAttempt] = useState(0);
+  const [route, setRoute] = useState(readRoute), [query, setQuery] = useState(''), [category, setCategory] = useState('all'), [tag, setTag] = useState(''), [sort, setSort] = useState('title');
+  const [assetQueries, setAssetQueries] = useState({});
   const [view, setView] = useState(() => readSetting('imon-library-view', 'grid') === 'list' ? 'list' : 'grid');
-  const [favorites, setFavorites] = useState(readFavorites);
-  const [route, setRoute] = useState(getRoute);
-  const [addOpen, setAddOpen] = useState(false);
-  const [toast, setToast] = useState('');
-  const toastTimer = useRef(null), lastTrigger = useRef(null), searchRef = useRef(null), lastPack = useRef(null);
+  const [favorites, setFavorites] = useState(readFavorites), [addOpen, setAddOpen] = useState(false), [toast, setToast] = useState('');
+  const toastTimer = useRef(null), searchRef = useRef(null), titleRef = useRef(null), mainRef = useRef(null);
+  const currentHash = useRef(location.hash), positions = useRef(new Map()), movement = useRef('initial');
   const notify = useCallback(async (message, copy = false) => {
     if (copy) { try { await navigator.clipboard.writeText(message); } catch { setToast('Не удалось скопировать. Разреши доступ к буферу или выдели код вручную.'); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(''), 4500); return; } }
     clearTimeout(toastTimer.current); setToast(copy ? 'Скопировано' : message); toastTimer.current = setTimeout(() => setToast(''), 2600);
   }, []);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
+  const navigate = useCallback((href = '', options = {}) => {
+    if (href === currentHash.current || (!href && !currentHash.current)) return;
+    positions.current.set(currentHash.current, scrollY);
+    history[options.replace ? 'replaceState' : 'pushState']({ imonLibrary: true }, '', location.pathname + location.search + href);
+    currentHash.current = location.hash; movement.current = options.replace ? 'replace' : 'push';
+    setRoute(readRoute()); setToast(''); setAddOpen(false);
+  }, []);
+  useEffect(() => {
+    const previous = history.scrollRestoration;
+    history.scrollRestoration = 'manual';
+    const changed = () => {
+      if (currentHash.current === location.hash) return;
+      positions.current.set(currentHash.current, scrollY);
+      currentHash.current = location.hash; movement.current = 'pop'; setRoute(readRoute()); setToast(''); setAddOpen(false);
+    };
+    addEventListener('hashchange', changed); addEventListener('popstate', changed);
+    return () => { history.scrollRestoration = previous; removeEventListener('hashchange', changed); removeEventListener('popstate', changed); };
+  }, []);
   useEffect(() => {
     const controller = new AbortController(); setLoad('loading');
-    fetch('/api/catalog.json', { signal: controller.signal, cache: 'no-cache' }).then(response => { if (!response.ok) throw new Error('Unavailable'); return response.json(); }).then(data => { if (controller.signal.aborted) return; if (data.schemaVersion !== 1 || !Array.isArray(data.packs) || data.packs.length > 500) throw new Error('Unsupported catalog'); setCatalog(data.packs.map(pack => validatePack(pack, location.origin))); setLoad('ready'); }).catch(() => { if (!controller.signal.aborted) setLoad('error'); });
+    fetch('/api/catalog.json', { signal: controller.signal, cache: 'no-cache', redirect: 'error' }).then(response => { if (!response.ok) throw new Error('Unavailable'); return response.json(); }).then(data => {
+      if (controller.signal.aborted) return;
+      if (data.schemaVersion !== 1 || !Array.isArray(data.packs) || data.packs.length > 500) throw new Error('Unsupported catalog');
+      setCatalog(data.packs.map(pack => validatePack(pack, location.origin))); setLoad('ready');
+    }).catch(() => { if (!controller.signal.aborted) setLoad('error'); });
     return () => controller.abort();
   }, [attempt]);
-  useEffect(() => { const changed = () => setRoute(getRoute()); addEventListener('hashchange', changed); addEventListener('popstate', changed); return () => { removeEventListener('hashchange', changed); removeEventListener('popstate', changed); }; }, []);
+  useEffect(() => {
+    if (load !== 'ready') return;
+    const frame = requestAnimationFrame(() => { titleRef.current?.focus({ preventScroll: true }); scrollTo(0, movement.current === 'pop' ? positions.current.get(route.hash) || 0 : 0); });
+    return () => cancelAnimationFrame(frame);
+  }, [route.hash, load]);
+  useEffect(() => {
+    const handler = event => {
+      const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
+      if (event.key === '/' && searchRef.current && !typing && !addOpen && !document.querySelector('[data-state="open"][role="dialog"]')) { event.preventDefault(); searchRef.current.focus(); }
+    };
+    addEventListener('keydown', handler); return () => removeEventListener('keydown', handler);
+  }, [route.hash, addOpen]);
   const latest = useMemo(() => { const result = new Map(); for (const pack of [...catalog].sort(compareVersion)) if (!result.has(pack.id)) result.set(pack.id, pack); return [...result.values()]; }, [catalog]);
-  const selected = useMemo(() => catalog.find(pack => packKey(pack) === route) || null, [catalog, route]);
-  if (selected) lastPack.current = selected;
-  const versions = useMemo(() => catalog.filter(pack => pack.id === (selected || lastPack.current)?.id).sort(compareVersion), [catalog, selected]);
-  useEffect(() => { if (load === 'ready' && route && !selected) { history.replaceState(null, '', location.pathname + location.search); setRoute(''); notify('Эта версия пака не найдена'); } }, [load, route, selected, notify]);
-  useEffect(() => { const handler = event => { const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable; if (event.key === '/' && searchRef.current && !typing && !route && !addOpen && !document.querySelector('[data-state="open"][role="dialog"]')) { event.preventDefault(); searchRef.current.focus(); } }; addEventListener('keydown', handler); return () => removeEventListener('keydown', handler); }, [route, addOpen]);
-  const openPack = useCallback((pack, trigger) => { lastTrigger.current = trigger; setToast(''); history.pushState({ imonLibrary: true }, '', `#pack=${packKey(pack)}`); setRoute(packKey(pack)); }, []);
-  const closePack = useCallback(() => { setRoute(''); setToast(''); if (history.state?.imonLibrary === true) history.back(); else history.replaceState(null, '', location.pathname + location.search); }, []);
-  const changeVersion = value => { const pack = versions.find(item => item.version === value); if (pack) { history.replaceState(history.state, '', `#pack=${packKey(pack)}`); setRoute(packKey(pack)); } };
-  const returnFocus = useCallback(() => { if (lastTrigger.current?.isConnected) lastTrigger.current.focus(); else searchRef.current?.focus(); }, []);
-  const toggleFavorite = useCallback(id => { setFavorites(current => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); if (!saveSetting('imon-library-favorites', JSON.stringify([...next]))) notify('Избранное сохранено только до закрытия страницы'); return next; }); }, [notify]);
-  const collectionPacks = useMemo(() => latest.filter(pack => collection === 'all' || favorites.has(pack.id)), [latest, collection, favorites]);
-  const filtered = useMemo(() => { const terms = query.toLocaleLowerCase('ru').trim().split(/\s+/).filter(Boolean); return collectionPacks.filter(pack => (category === 'all' || pack.category === category) && (!tag || pack.tags.includes(tag)) && terms.every(term => [pack.title, pack.summary, pack.id, categoryName(pack.category), ...pack.tags, ...pack.assets.flatMap(asset => [asset.title, asset.description])].join(' ').toLocaleLowerCase('ru').includes(term))).sort((a, b) => (sort === 'category' ? categoryName(a.category).localeCompare(categoryName(b.category), 'ru') : sort === 'assets' ? b.assets.length - a.assets.length : 0) || a.title.localeCompare(b.title, 'ru')); }, [collectionPacks, category, tag, query, sort]);
+  const folders = useMemo(() => {
+    const result = new Map();
+    for (const pack of latest) if (pack.folder) { const folder = result.get(pack.folder.id) || { ...pack.folder, count: 0 }; folder.count++; result.set(folder.id, folder); }
+    return [...result.values()].sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+  }, [latest]);
+  const selected = useMemo(() => catalog.find(pack => packKey(pack) === route.key) || null, [catalog, route.key]);
+  const selectedAsset = selected?.assets.find(asset => asset.id === route.assetId) || null;
+  const selectedFolder = folders.find(folder => folder.id === route.folderId);
+  const versions = useMemo(() => selected ? catalog.filter(pack => pack.id === selected.id).sort(compareVersion) : [], [catalog, selected]);
+  const missing = load === 'ready' && (route.kind === 'missing' || (['asset', 'collection'].includes(route.kind) && !selected) || (route.kind === 'asset' && !selectedAsset) || (route.kind === 'folder' && !selectedFolder));
+  const isListing = ['all', 'folder', 'favorites'].includes(route.kind) && !missing;
+  const collectionPacks = useMemo(() => latest.filter(pack => route.kind === 'favorites' ? favorites.has(pack.id) : route.kind === 'folder' ? pack.folder?.id === route.folderId : true), [latest, route.kind, route.folderId, favorites]);
+  const filtered = useMemo(() => {
+    const terms = termsFor(query);
+    return collectionPacks.filter(pack => (category === 'all' || pack.category === category) && (!tag || pack.tags.includes(tag)) && matchesTerms(terms, [pack.id, pack.title, pack.summary, pack.folder?.title || '', categoryName(pack.category), ...pack.tags, ...pack.assets.flatMap(asset => [asset.id, asset.title, asset.description])]))
+      .sort((a, b) => (sort === 'category' ? categoryName(a.category).localeCompare(categoryName(b.category), 'ru') : sort === 'assets' ? b.assets.length - a.assets.length : 0) || a.title.localeCompare(b.title, 'ru'));
+  }, [collectionPacks, query, category, tag, sort]);
+  const toggleFavorite = useCallback(id => setFavorites(current => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); if (!saveSetting('imon-library-favorites', JSON.stringify([...next]))) notify('Избранное сохранено только до закрытия страницы'); return next; }), [notify]);
   const clearFilters = () => { setCategory('all'); setTag(''); };
-  const resetAll = () => { setQuery(''); setCategory('all'); setTag(''); setCollection('all'); };
+  const clearSearch = () => { setQuery(''); clearFilters(); };
+  const changeVersion = value => {
+    const target = versions.find(pack => pack.version === value);
+    if (target) navigate(packHref(target, selectedAsset ? target.assets.find(asset => asset.id === selectedAsset.id) : undefined), { replace: true });
+  };
+  const pageTitle = missing ? 'Страница не найдена' : route.kind === 'asset' ? selectedAsset?.title || 'Ассет' : route.kind === 'collection' ? selected?.title || 'Коллекция' : route.kind === 'folder' ? selectedFolder?.title || 'Папка' : route.kind === 'favorites' ? 'Избранное' : 'Все коллекции';
+  const crumbs = [];
+  if (route.kind !== 'all') {
+    crumbs.push({ title: 'Библиотека', href: '' });
+    if (selected?.folder) crumbs.push({ title: selected.folder.title, href: folderHref(selected.folder.id) });
+    if (selectedAsset) crumbs.push({ title: selected.title, href: packHref(selected) });
+    crumbs.push({ title: pageTitle });
+  }
   const savedCount = latest.filter(pack => favorites.has(pack.id)).length;
   const hasPacks = latest.length > 0;
-  const availableCategories = categoryList.filter(([id]) => latest.some(pack => pack.category === id));
+  const count = isListing ? filtered.length : selected && !selectedAsset ? selected.assets.length : null;
   const addControl = <AddDialog open={addOpen} onOpenChange={value => { setToast(''); setAddOpen(value); }} notify={notify} toast={toast} triggerLabel={hasPacks ? 'Добавить' : 'Как добавить'} />;
   return <Theme appearance={appearance} accentColor="gray" grayColor="gray" radius="medium" scaling="100%" panelBackground="solid" hasBackground={false} className="library-theme" data-appearance={appearance}>
-    <a className="skip-link" href="#catalog">К каталогу</a>
-    <Tabs.Root value={collection} orientation={compact ? 'horizontal' : 'vertical'} onValueChange={value => { setCollection(value); setCategory('all'); setTag(''); }} className="collection-root library-frame">
-      <aside className="workspace-sidebar" aria-label="Навигация библиотеки">
-        <div className="sidebar-brand"><a className="brand" href="/" aria-label="I’MON Design Library"><BrandMark /><span className="brand-label">design library</span></a></div>
-        <Tabs.List className="collection-tabs" aria-label="Коллекция">
-          <Tabs.Trigger value="all"><GridIcon /><span>Все паки</span><span className="tab-count">{latest.length}</span></Tabs.Trigger>
-          <Tabs.Trigger value="favorites"><BookmarkIcon /><span>Избранное</span><span className="tab-count">{savedCount}</span></Tabs.Trigger>
-        </Tabs.List>
-        {hasPacks && <nav className="sidebar-categories" aria-label="Категории паков"><span className="sidebar-label">Категории</span>{availableCategories.map(([id, title]) => <button className="category-nav" key={id} aria-pressed={category === id && collection === 'all'} onClick={() => { setCollection('all'); setCategory(id); setTag(''); setQuery(''); }}><FileTextIcon /><span>{title}</span><span className="tab-count">{latest.filter(pack => pack.category === id).length}</span></button>)}</nav>}
-        <div className="sidebar-bottom"><div className="sidebar-links"><a className="text-link" href={`${REPOSITORY}/blob/main/docs/ADDING_ASSETS.md`} target="_blank" rel="noopener noreferrer">Инструкция <ArrowTopRightIcon /></a><a className="text-link" href={REPOSITORY} target="_blank" rel="noopener noreferrer">GitHub <ArrowTopRightIcon /></a></div><div className="appearance-control"><span>Оформление</span><ThemeSwitch value={choice} onChange={choose} /></div></div>
-      </aside>
-      <main className="library-shell" id="catalog" tabIndex={-1}>
-        <header className="workspace-heading"><div><h1>{collection === 'favorites' ? 'Избранное' : category === 'all' ? 'Все паки' : categoryName(category)}</h1>{hasPacks && <span className="heading-count" aria-live="polite">{filtered.length}</span>}</div><div className="heading-actions">{hasPacks && addControl}</div></header>
-      {hasPacks && <div className="library-toolbar"><TextField.Root className="catalog-search" ref={searchRef} aria-label="Поиск по библиотеке" placeholder="Поиск по библиотеке" value={query} onChange={event => setQuery(event.target.value)} size="3"><TextField.Slot><MagnifyingGlassIcon /></TextField.Slot><TextField.Slot>{query ? <IconButton variant="ghost" size="1" color="gray" aria-label="Очистить поиск" onClick={() => { setQuery(''); searchRef.current?.focus(); }}><Cross2Icon /></IconButton> : <kbd>/</kbd>}</TextField.Slot></TextField.Root><div className="toolbar-actions"><FilterMenu category={category} setCategory={setCategory} tag={tag} setTag={setTag} packs={collectionPacks} clear={clearFilters} /><Select.Root value={sort} onValueChange={setSort}><Select.Trigger className="sort-select" aria-label="Сортировка паков" variant="ghost" /><Select.Content position="popper"><Select.Item value="title">По названию</Select.Item><Select.Item value="category">По категории</Select.Item><Select.Item value="assets">По числу ассетов</Select.Item></Select.Content></Select.Root><SegmentedControl.Root className="view-switch" size="1" aria-label="Вид каталога" value={view} onValueChange={value => { setView(value); saveSetting('imon-library-view', value); }}><SegmentedControl.Item value="grid" aria-label="Плитка" title="Плитка"><GridIcon /></SegmentedControl.Item><SegmentedControl.Item value="list" aria-label="Список" title="Список"><RowsIcon /></SegmentedControl.Item></SegmentedControl.Root></div></div>}
-      {(category !== 'all' || tag) && <div className="active-filters">{category !== 'all' && <Button variant="soft" size="1" color="gray" onClick={() => { setCategory('all'); setTag(''); }}>{categoryName(category)}<Cross2Icon /></Button>}{tag && <Button variant="soft" size="1" color="gray" onClick={() => setTag('')}>{tag}<Cross2Icon /></Button>}<button onClick={clearFilters}>Сбросить</button></div>}
-      {['all', 'favorites'].map(value => <Tabs.Content className="catalog-results" value={value} key={value}>{collection === value && <>
-        {load === 'loading' ? <div className="library-empty"><p className="muted-copy" role="status">Загружаем библиотеку</p></div> : load === 'error' ? <div className="library-empty"><div className="empty-copy"><h2>Каталог не загрузился</h2><p>Проверь соединение и попробуй еще раз.</p><Button variant="surface" onClick={() => setAttempt(value => value + 1)}>Попробовать снова</Button></div></div> : !hasPacks && collection === 'all' ? <div className="library-empty"><div className="empty-copy"><h2>Пока нет паков</h2><p>Пришли в чат файл или ссылку и укажи, в какой пак его добавить.</p>{addControl}</div></div> : filtered.length ? <div className={view === 'list' ? 'pack-list' : 'pack-grid'}>{filtered.map(pack => <PackCard key={pack.id} pack={pack} saved={favorites.has(pack.id)} onOpen={openPack} onFavorite={toggleFavorite} />)}</div> : collection === 'favorites' && !query && category === 'all' && !tag ? <div className="library-empty"><div className="empty-copy"><h2>Нет сохраненных паков</h2><p>Отмечай нужные паки закладкой. Они будут доступны здесь, в этом браузере.</p><Button variant="surface" onClick={resetAll}>Все паки</Button></div></div> : <div className="empty-state"><h2>Ничего не нашлось</h2><p>Попробуй другое слово или убери часть фильтров.</p><Button variant="surface" onClick={resetAll}>Сбросить поиск</Button></div>}
-      </>}</Tabs.Content>)}
-      {hasPacks && <footer className="catalog-footer"><span>{`Показано ${filtered.length} из ${collectionPacks.length}`}</span><a href="/third-party-notices.txt" target="_blank" rel="noopener noreferrer">Лицензии интерфейса</a></footer>}
-    </main></Tabs.Root><PackDialog pack={selected || lastPack.current} versions={versions} open={!!selected} onClose={closePack} onVersion={changeVersion} returnFocus={returnFocus} notify={notify} toast={toast} />{!selected && !addOpen && <Toast message={toast} />}
+    <a className="skip-link" href="#catalog" onClick={event => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView(); }}>К каталогу</a>
+    <div className="library-frame"><aside className="workspace-sidebar" aria-label="Навигация библиотеки">
+      <div className="sidebar-brand"><PageLink className="brand" href="" navigate={navigate} aria-label="I’MON Design Library"><BrandMark /><span className="brand-label">design library</span></PageLink></div>
+      <nav className="collection-nav" aria-label="Библиотека"><PageLink className="collection-nav-link" href="" navigate={navigate} beforeNavigate={clearSearch} aria-current={route.kind === 'all' ? 'page' : undefined}><GridIcon /><span>Все коллекции</span><span className="tab-count">{latest.length}</span></PageLink><PageLink className="collection-nav-link" href="#view=favorites" navigate={navigate} beforeNavigate={clearSearch} aria-current={route.kind === 'favorites' ? 'page' : undefined}><BookmarkIcon /><span>Избранное</span><span className="tab-count">{savedCount}</span></PageLink></nav>
+      {folders.length > 0 && <nav className="sidebar-folders" aria-label="Папки"><span className="sidebar-label">Папки</span>{folders.map(folder => <PageLink className="folder-nav" key={folder.id} href={folderHref(folder.id)} navigate={navigate} beforeNavigate={clearSearch} data-folder={folder.id} data-active={route.folderId === folder.id || selected?.folder?.id === folder.id ? 'true' : undefined} aria-current={route.kind === 'folder' && route.folderId === folder.id ? 'page' : undefined}><FolderSymbol /><span>{folder.title}</span><span className="tab-count">{folder.count}</span></PageLink>)}</nav>}
+      <div className="sidebar-bottom"><div className="sidebar-links"><a className="text-link" href={REPOSITORY + '/blob/main/docs/ADDING_ASSETS.md'} target="_blank" rel="noopener noreferrer">Инструкция <ArrowTopRightIcon /></a><a className="text-link" href={REPOSITORY} target="_blank" rel="noopener noreferrer">GitHub <ArrowTopRightIcon /></a></div><div className="appearance-control"><span>Оформление</span><ThemeSwitch value={choice} onChange={choose} /></div></div>
+    </aside>
+    <main className="library-shell" id="catalog" ref={mainRef} tabIndex={-1}>
+      <header className="workspace-heading"><div className="workspace-title"><Breadcrumbs items={crumbs} navigate={navigate} /><div className="page-title-line"><h1 ref={titleRef} tabIndex={-1} className={'page-title' + (route.kind === 'collection' ? ' collection-title' : route.kind === 'asset' ? ' asset-title' : '')}>{pageTitle}</h1>{load === 'ready' && hasPacks && count !== null && <span className="heading-count" aria-live="polite">{count}</span>}</div></div>
+      <div className="heading-actions">{selected && !missing ? <>
+        <Select.Root value={selected.version} onValueChange={changeVersion}><Select.Trigger className="version-select" aria-label="Версия коллекции" variant="surface" /><Select.Content position="popper">{versions.map(pack => <Select.Item key={pack.version} value={pack.version}>v{pack.version}</Select.Item>)}</Select.Content></Select.Root>
+        <FavoriteButton className="header-bookmark" pack={selected} saved={favorites.has(selected.id)} onFavorite={toggleFavorite} />
+        {selectedAsset && fileFor(selected, selectedAsset) ? <Button asChild highContrast size="2"><a href={fileFor(selected, selectedAsset).url} download={selectedAsset.path.split('/').at(-1)}><DownloadIcon />Скачать ассет</a></Button>
+          : <Button asChild highContrast size="2"><a href={selected.downloadUrl} download={selected.id + '-' + selected.version + '.zip'}><DownloadIcon />Скачать коллекцию</a></Button>}
+      </> : hasPacks && addControl}</div></header>
+      {load === 'loading' ? <div className="library-empty"><p className="muted-copy" role="status">Загружаем библиотеку</p></div>
+        : load === 'error' ? <div className="library-empty"><div className="empty-copy"><h2>Каталог не загрузился</h2><p>Проверь соединение и попробуй еще раз.</p><Button variant="surface" onClick={() => setAttempt(value => value + 1)}>Попробовать снова</Button></div></div>
+        : missing ? <div className="library-empty"><div className="empty-copy"><h2>Не удалось найти этот материал</h2><p>Проверь ссылку или вернись в библиотеку.</p><Button asChild variant="surface"><PageLink href="" navigate={navigate}>Все коллекции</PageLink></Button></div></div>
+        : route.kind === 'collection' ? <CollectionPage key={packKey(selected)} pack={selected} navigate={navigate} notify={notify} searchRef={searchRef} query={assetQueries[packKey(selected)] || ''} setQuery={value => setAssetQueries(current => ({ ...current, [packKey(selected)]: value }))} />
+        : route.kind === 'asset' ? <AssetPage key={packKey(selected) + '/' + selectedAsset.id} pack={selected} asset={selectedAsset} navigate={navigate} notify={notify} />
+        : <>
+          {hasPacks && <div className="library-toolbar"><SearchField value={query} onChange={setQuery} inputRef={searchRef} /><div className="toolbar-actions"><FilterMenu category={category} setCategory={setCategory} tag={tag} setTag={setTag} packs={collectionPacks} clear={clearFilters} /><Select.Root value={sort} onValueChange={setSort}><Select.Trigger className="sort-select" aria-label="Сортировка коллекций" variant="ghost" /><Select.Content position="popper"><Select.Item value="title">По названию</Select.Item><Select.Item value="category">По категории</Select.Item><Select.Item value="assets">По числу ассетов</Select.Item></Select.Content></Select.Root><SegmentedControl.Root className="view-switch" size="1" aria-label="Вид каталога" value={view} onValueChange={value => { setView(value); saveSetting('imon-library-view', value); }}><SegmentedControl.Item value="grid" aria-label="Плитка" title="Плитка"><GridIcon /></SegmentedControl.Item><SegmentedControl.Item value="list" aria-label="Список" title="Список"><RowsIcon /></SegmentedControl.Item></SegmentedControl.Root></div></div>}
+          {(category !== 'all' || tag) && <div className="active-filters">{category !== 'all' && <Button variant="soft" size="1" color="gray" onClick={() => { setCategory('all'); setTag(''); }}>{categoryName(category)}<Cross2Icon /></Button>}{tag && <Button variant="soft" size="1" color="gray" onClick={() => setTag('')}>{tag}<Cross2Icon /></Button>}<button onClick={clearFilters}>Сбросить</button></div>}
+          <div className="catalog-results">{!hasPacks && route.kind === 'all' ? <div className="library-empty"><div className="empty-copy"><h2>Пока нет коллекций</h2><p>Пришли в чат файл или ссылку и укажи, в какую коллекцию его добавить.</p>{addControl}</div></div>
+            : filtered.length ? <div className={view === 'list' ? 'pack-list' : 'pack-grid'}>{filtered.map(pack => <PackCard key={packKey(pack)} pack={pack} saved={favorites.has(pack.id)} navigate={navigate} onFavorite={toggleFavorite} />)}</div>
+              : route.kind === 'favorites' && !query && category === 'all' && !tag ? <div className="library-empty"><div className="empty-copy"><h2>Нет сохраненных коллекций</h2><p>Отмечай нужные коллекции закладкой. Они останутся в этом браузере.</p><Button asChild variant="surface"><PageLink href="" navigate={navigate}>Все коллекции</PageLink></Button></div></div>
+                : <div className="empty-state"><h2>Ничего не нашлось</h2><p>Попробуй другое слово или убери часть фильтров.</p><Button variant="surface" onClick={clearSearch}>Сбросить поиск</Button></div>}</div>
+          {hasPacks && <footer className="catalog-footer"><span>Показано {filtered.length} из {collectionPacks.length}</span><a href="/third-party-notices.txt" target="_blank" rel="noopener noreferrer">Лицензии интерфейса</a></footer>}
+        </>}
+    </main></div>{!addOpen && <Toast message={toast} />}
   </Theme>;
 }
 class CatalogBoundary extends React.Component {

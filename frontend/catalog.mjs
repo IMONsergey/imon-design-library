@@ -42,6 +42,14 @@ function exactPath(value, expected, origin, field) {
   check(parsed.origin === origin && parsed.pathname === value && !parsed.search && !parsed.hash, field);
 }
 
+function previewPath(value, base, listed, origin, field) {
+  check(typeof value === 'string' && value.startsWith(base), field);
+  const filename = value.slice(base.length);
+  filePath(filename, field);
+  check(/\.html?$/.test(filename) && listed.has(filename), field);
+  exactPath(value, `${base}${filename}`, origin, field);
+}
+
 function provenance(source) {
   if (source === undefined) return;
   record(source, 'source');
@@ -64,7 +72,15 @@ export function validatePack(pack, origin) {
   text(pack.title, 'title', 120);
   text(pack.summary, 'summary');
   check(CATEGORIES.has(pack.category), 'category');
+  if (pack.folder !== undefined) {
+    record(pack.folder, 'folder');
+    check(Object.keys(pack.folder).every(key => ['id', 'title'].includes(key)), 'folder');
+    slug(pack.folder.id, 'folder.id');
+    text(pack.folder.title, 'folder.title', 120);
+    check(pack.folder.title === pack.folder.title.trim(), 'folder.title');
+  }
   check(typeof pack.scripts === 'boolean', 'scripts');
+  if (pack.autoplay !== undefined) check(typeof pack.autoplay === 'boolean', 'autoplay');
   check(Array.isArray(pack.tags) && pack.tags.length <= 20, 'tags');
   pack.tags.forEach(tag => text(tag, 'tags', 48));
   record(pack.license, 'license');
@@ -76,6 +92,7 @@ export function validatePack(pack, origin) {
     text(pack.review.date, 'review.date', 10);
     check(/^\d{4}-\d{2}-\d{2}$/.test(pack.review.date), 'review.date');
   }
+  if (pack.autoplay === true) check(pack.scripts === true && pack.review !== undefined, 'autoplay requires scripts and review');
   check(Number.isSafeInteger(pack.downloadSize) && pack.downloadSize >= 0, 'downloadSize');
   if (pack.downloadSha256 !== undefined) check(typeof pack.downloadSha256 === 'string' && HASH.test(pack.downloadSha256), 'downloadSha256');
 
@@ -100,11 +117,7 @@ export function validatePack(pack, origin) {
     check(listed.has(pack.license.file), 'license.file');
   }
   const previewBase = `/previews/${base}`;
-  check(typeof pack.previewUrl === 'string' && pack.previewUrl.startsWith(previewBase), 'previewUrl');
-  const preview = pack.previewUrl.slice(previewBase.length);
-  filePath(preview, 'previewUrl');
-  check(/\.html?$/.test(preview) && listed.has(preview), 'previewUrl');
-  exactPath(pack.previewUrl, `${previewBase}${preview}`, origin, 'previewUrl');
+  previewPath(pack.previewUrl, previewBase, listed, origin, 'previewUrl');
 
   check(Array.isArray(pack.assets) && pack.assets.length > 0 && pack.assets.length <= 256, 'assets');
   const assetIds = new Set();
@@ -118,6 +131,8 @@ export function validatePack(pack, origin) {
     text(asset.usage, 'asset.usage', 10000);
     filePath(asset.path, 'asset.path');
     check(listed.has(asset.path), 'asset.path');
+    if (asset.url !== undefined) exactPath(asset.url, `/raw/${base}${asset.path}`, origin, 'asset.url');
+    if (asset.previewUrl !== undefined) previewPath(asset.previewUrl, previewBase, listed, origin, 'asset.previewUrl');
   }
   return pack;
 }

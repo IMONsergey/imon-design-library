@@ -87,6 +87,52 @@ test('manifest requires known fields and matching directory identity', (t) => {
   assert.throws(() => loadLibrary(f.root), /does not match/);
 });
 
+test('optional folders are bounded grouping metadata, not paths or arbitrary records', (t) => {
+  const f = fixture(t);
+  assert.doesNotThrow(() => validateManifest({ ...f.manifest, folder: { id: 'visual', title: 'Visual' } }));
+  for (const folder of [null, [], 'visual', {}, { id: 'visual' }, { title: 'Visual' }, { id: '../visual', title: 'Visual' }, { id: 'Visual', title: 'Visual' }, { id: 'a'.repeat(81), title: 'Visual' }, { id: 'visual', title: '' }, { id: 'visual', title: ' Visual' }, { id: 'visual', title: 'a'.repeat(121) }, { id: 'visual', title: 'Bad\u0000title' }, { id: 'visual', title: 'Visual', url: 'https://example.com' }]) {
+    assert.throws(() => validateManifest({ ...f.manifest, folder }), /folder/, JSON.stringify(folder));
+  }
+});
+
+test('autoplay is optional, boolean, and requires reviewed script permission even for drafts', (t) => {
+  const f = fixture(t);
+  for (const autoplay of [null, 'true', 'false', 0, 1, {}, []]) {
+    assert.throws(() => validateManifest({ ...f.manifest, autoplay }), /autoplay/);
+  }
+  assert.doesNotThrow(() => validateManifest(f.manifest));
+  assert.doesNotThrow(() => validateManifest({ ...f.manifest, autoplay: false }));
+  assert.throws(() => validateManifest({ ...f.manifest, autoplay: true }), /autoplay.*scripts=true/);
+  assert.doesNotThrow(() => validateManifest({ ...f.manifest, scripts: true, autoplay: true }));
+  const unreviewed = { ...f.manifest, status: 'draft', scripts: true, autoplay: true };
+  delete unreviewed.review;
+  assert.throws(() => validateManifest(unreviewed), /autoplay.*review/);
+  assert.doesNotThrow(() => validateManifest({ ...unreviewed, autoplay: false }));
+});
+
+test('asset previews must be listed local HTML files and source manifests cannot supply URLs', (t) => {
+  const f = fixture(t);
+  const withPreview = preview => ({ ...f.manifest, assets: [{ ...f.manifest.assets[0], preview }] });
+  assert.doesNotThrow(() => validateManifest(withPreview('preview/index.html')));
+  for (const preview of [null, {}, '', '../outside.html', '/index.html', './preview/index.html', 'preview/../index.html', 'preview\\index.html', 'preview/%2e%2e/index.html', 'preview/index.html?x=1', 'preview/index.html#x', 'https://example.com/index.html', '//example.com/index.html', 'tokens.css', 'preview/missing.html']) {
+    assert.throws(() => validateManifest(withPreview(preview)), /preview/, JSON.stringify(preview));
+  }
+  for (const field of ['url', 'previewUrl']) {
+    assert.throws(() => validateManifest({ ...f.manifest, assets: [{ ...f.manifest.assets[0], [field]: 'https://example.com/file.html' }] }), /unknown field/);
+  }
+});
+
+test('asset-specific preview resources and scripts receive the existing content checks', (t) => {
+  const f = fixture(t);
+  const filename = addFile(f, 'preview/asset.html', '<img src="https://example.com/pixel.png">');
+  f.manifest.assets[0].preview = 'preview/asset.html'; f.save();
+  assert.throws(() => loadLibrary(f.root), /external/);
+  fs.writeFileSync(filename, '<script>throw new Error("never execute during validation")</script>');
+  assert.throws(() => loadLibrary(f.root), /scripts=true/);
+  f.manifest.scripts = true; f.save();
+  assert.doesNotThrow(() => loadLibrary(f.root));
+});
+
 for (const version of ['1', '1.0', '01.0.0', '1.0.0-beta.1', '../1.0.0', '1.0.1000000000']) {
   test(`version must be strict semver: ${JSON.stringify(version)}`, (t) => {
     const f = fixture(t);
@@ -339,6 +385,63 @@ test('only public published versions appear anywhere in the build output', (t) =
   assert.equal(result.catalog.packs[0].files.length, f.manifest.files.length);
   const exact = JSON.parse(fs.readFileSync(path.join(result.output, result.catalog.packs[0].manifestUrl.slice(1))));
   assert.deepEqual(exact, result.catalog.packs[0]);
+});
+
+test('builder generates canonical per-asset URLs and explicit autoplay defaults without rewriting sources', (t) => {
+  const f = fixture(t);
+  const legacy = buildLibrary(f.root).catalog.packs[0];
+  assert.equal(legacy.autoplay, false);
+  assert.equal(Object.hasOwn(legacy, 'folder'), false);
+  assert.equal(legacy.assets[0].url, `/raw/${f.manifest.id}/${f.manifest.version}/tokens.css`);
+  assert.equal(Object.hasOwn(legacy.assets[0], 'previewUrl'), false);
+  assert.equal(f.manifest.autoplay, undefined);
+  addFile(f, 'preview/asset.htm', '<!doctype html><p>Isolated asset preview.</p>');
+  f.manifest.folder = { id: 'visual', title: 'Visual' };
+  f.manifest.scripts = true; f.manifest.autoplay = true;
+  f.manifest.assets[0].preview = 'preview/asset.htm'; f.save();
+  const before = fs.readFileSync(path.join(f.directory, 'manifest.json'));
+  const result = buildLibrary(f.root);
+  const item = result.catalog.packs[0];
+  assert.deepEqual(item.folder, f.manifest.folder);
+  assert.equal(item.autoplay, true);
+  assert.equal(item.assets[0].url, `/raw/${f.manifest.id}/${f.manifest.version}/tokens.css`);
+  assert.equal(item.assets[0].previewUrl, `/previews/${f.manifest.id}/${f.manifest.version}/preview/asset.htm`);
+  assert.equal(Object.hasOwn(item.assets[0], 'preview'), false, 'Source paths are translated, not copied as arbitrary URLs');
+  assert.equal(fs.existsSync(path.join(result.output, item.assets[0].previewUrl.slice(1))), true);
+  assert.deepEqual(fs.readFileSync(path.join(f.directory, 'manifest.json')), before);
+});
+
+test('new folder and autoplay metadata does not drop or mutate older published versions', (t) => {
+  const f = fixture(t);
+  const original = fs.readFileSync(path.join(f.directory, 'manifest.json'));
+  const next = createDraft(f.root, { id: f.manifest.id, version: '1.1.0' });
+  const manifest = {
+    ...f.manifest, version: '1.1.0', folder: { id: 'visual', title: 'Visual' }, scripts: true, autoplay: true,
+    assets: [{ ...f.manifest.assets[0], preview: next.manifest.preview }],
+  };
+  fs.writeFileSync(path.join(next.directory, 'manifest.json'), JSON.stringify(manifest));
+  const result = buildLibrary(f.root);
+  assert.deepEqual(result.catalog.packs.map(pack => pack.version), ['1.0.0', '1.1.0']);
+  assert.equal(result.catalog.packs[0].autoplay, false);
+  assert.equal(result.catalog.packs[1].autoplay, true);
+  assert.equal(result.health.packVersions, 2);
+  assert.equal(result.health.assets, 2);
+  assert.deepEqual(fs.readFileSync(path.join(f.directory, 'manifest.json')), original);
+});
+
+test('published JSON schema keeps new metadata optional and conditions autoplay on scripts and review', () => {
+  const schema = JSON.parse(fs.readFileSync(new URL('../schemas/pack.schema.json', import.meta.url), 'utf8'));
+  assert.equal(schema.required.includes('folder'), false);
+  assert.equal(schema.required.includes('autoplay'), false);
+  assert.equal(schema.$defs.asset.required.includes('preview'), false);
+  assert.deepEqual(schema.properties.folder.required, ['id', 'title']);
+  assert.equal(schema.properties.folder.additionalProperties, false);
+  assert.equal(schema.properties.autoplay.type, 'boolean');
+  assert.equal(schema.properties.autoplay.default, false);
+  const condition = schema.allOf.find(rule => rule.if?.required?.includes('autoplay'));
+  assert.equal(condition.if.properties.autoplay.const, true);
+  assert.deepEqual(condition.then.required, ['review']);
+  assert.equal(condition.then.properties.scripts.const, true);
 });
 
 test('built raw/preview resources and deterministic ZIP are byte-identical to source', (t) => {

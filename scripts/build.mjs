@@ -47,14 +47,19 @@ export function buildLibrary(root = process.cwd(), { revision = process.env.LIBR
         schemaVersion: 1,
         id: manifest.id, version: manifest.version, title: manifest.title, summary: manifest.summary,
         category: manifest.category, tags: manifest.tags, license: manifest.license, source: manifest.source,
-        review: manifest.review, scripts: manifest.scripts,
+        ...(manifest.folder === undefined ? {} : { folder: manifest.folder }),
+        review: manifest.review, scripts: manifest.scripts, autoplay: manifest.autoplay === true,
         previewUrl: `/previews/${base}/${manifest.preview}`,
         downloadUrl: `/downloads/${manifest.id}-${manifest.version}.zip`,
         downloadSize: archive.length,
         downloadSha256: createHash('sha256').update(archive).digest('hex'),
         manifestUrl: `/api/packs/${base}.json`,
         files: [...files].map(([filename, file]) => ({ path: filename, url: `/raw/${base}/${filename}`, size: file.size, sha256: file.sha256 })),
-        assets: manifest.assets,
+        assets: manifest.assets.map(({ preview, ...asset }) => ({
+          ...asset,
+          url: `/raw/${base}/${asset.path}`,
+          ...(preview === undefined ? {} : { previewUrl: `/previews/${base}/${preview}` }),
+        })),
       };
       for (const [filename, file] of files) {
         write(staging, `raw/${base}/${filename}`, file.data);

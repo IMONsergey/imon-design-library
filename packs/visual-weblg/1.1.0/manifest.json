@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "id": "visual-weblg",
+  "version": "1.1.0",
+  "title": "Diamonds Collection",
+  "summary": "10 самостоятельных бриллиантов. Живое превью, вращение и мягкий автоповорот.",
+  "category": "components",
+  "folder": {
+    "id": "visual",
+    "title": "Visual"
+  },
+  "status": "published",
+  "visibility": "public",
+  "tags": [
+    "webgl",
+    "бриллианты",
+    "интерактив",
+    "canvas",
+    "tilda"
+  ],
+  "license": {
+    "id": "LicenseRef-IMON-Proprietary",
+    "file": "LICENSE.txt",
+    "redistribution": true
+  },
+  "source": {
+    "type": "original",
+    "author": "Сергей Отческов / I’MON"
+  },
+  "review": {
+    "by": "ChatGPT: сохранность исходника, изоляция и разделение огранок",
+    "date": "2026-11-04"
+  },
+  "preview": "assets/round.html",
+  "scripts": true,
+  "autoplay": true,
+  "files": [
+    "assets/round.html",
+    "assets/oval.html",
+    "assets/pear.html",
+    "assets/marquise.html",
+    "assets/cushion.html",
+    "assets/princess.html",
+    "assets/emerald.html",
+    "assets/radiant.html",
+    "assets/asscher.html",
+    "assets/trillion.html",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "assets": [
+    {
+      "id": "round",
+      "title": "Круглая",
+      "type": "component",
+      "path": "assets/round.html",
+      "preview": "assets/round.html",
+      "description": "Круглая бриллиантовая огранка. Самостоятельный WebGL-ассет: оригинальные свет, материал и цветовая дисперсия, вращение с инерцией и мягкий автоповорот.",
+      "usage": "Скачай assets/round.html и открой в браузере: все уже внутри, интернет не нужен. Для встраивания размести файл в своем проекте и используй iframe с sandbox=\"allow-scripts\", width=\"100%\", height=\"640\" и style=\"border:0;display:block\". Например, src=\"./diamonds/round.html\". Можно использовать карточку 320 × 240 px; крупное превью показывает управление ракурсом. Перетаскивание или стрелки вращают камень, Home сбрасывает положение. Автоповорот начинается через 2 секунды, reduced motion его отключает. Каждый экземпляр размещай в отдельном iframe."
+    },
+    {
+      "id": "oval",
+      "title": "Овал",
+      "type": "component",
+      "path": "assets/oval.html",
+      "preview": "assets/oval.html",
+      "description": "Овальная бриллиантовая огранка. Самостоятельный WebGL-ассет: оригинальные свет, материал и цветовая дисперсия, вращение с инерцией и мягкий автоповорот.",
+      "usage": "Скачай assets/oval.html и открой в браузере: все уже внутри, интернет не нужен. Для встраивания размести файл в своем проекте и используй iframe с sandbox=\"allow-scripts\", width=\"100%\", height=\"640\" и style=\"border:0;display:block\". Например, src=\"./diamonds/oval.html\". Можно использовать карточку 320 × 240 px; крупное превью показывает управление ракурсом. Перетаскивание или стрелки вращают камень, Home сбрасывает положение. Автоповорот начинается через 2 секунды, reduced motion его отключает. Каждый экземпляр размещай в отдельном iframe."
+    },
+    {
+      "id": "pear",
+      "title": "Груша",
+      "type": "component",
+      "path": "assets/pear.html",
+      "preview": "assets/pear.html",
+      "description": "Грушевидная бриллиантовая огранка. Самостоятельный WebGL-ассет: оригинальные свет, материал и цветовая дисперсия, вращение с инерцией и мягкий автоповорот.",
+      "usage": "Скачай assets/pear.html и открой в браузере: все уже внутри, интернет не нужен. Для встраивания размести файл в своем проекте и используй iframe с sandbox=\"allow-scripts\", width=\"100%\", height=\"640\" и style=\"border:0;display:block\". Например, src=\"./diamonds/pear.html\". Можно использовать карточку 320 × 240 px; крупное превью показывает управление ракурсом. Перетаскивание или стрелки вращают камень, Home сбрасывает положение. Автоповорот начинается через 2 секунды, reduced motion его отключает. Каждый экземпляр размещай в отдельном iframe."
+    },
+    {
+      "id": "marquise",
+      "title": "Маркиз",
+      "type": "component",
+      "path": "assets/marquise.html",
+      "preview": "assets/marquise.html",
+      "description": "Бриллиантовая огранка маркиз. Самостоятельный WebGL-ассет: оригинальные свет, материал и цветовая дисперсия, вращение с инерцией и мягкий автоповорот.",
+      "usage": "Скачай assets/marquise.html и открой в браузере: все уже внутри, интернет не нужен. Для встраивания размести файл в своем проекте и используй iframe с sandbox=\"allow-scripts\", width=\"100%\", height=\"640\" и style=\"border:0;display:block\". Например, src=\"./diamonds/marquise.html\". Можно использовать карточку 320 × 240 px; крупное превью показывает управление ракурсом. Перетаскивание или стрелки вращают камень, Home сбрасывает положение. Автоповорот начинается через 2 секунды, reduced motion его отключает. Каждый экземпляр размещай в отдельном iframe."
+    },
+    {
+      "id": "cushion",
+      "title": "Кушон",
+      "type": "component",
+      "path": "assets/cushion.html",
+      "preview": "assets/cushion.html",
+      "description": "Бриллиантовая огранка кушон. Самостоятельный WebGL-ассет: оригинальные свет, материал и цветовая дисперсия, вращение с инерцией и мягкий автоповорот.",
+      "usage": "Скачай assets/cushion.html и открой в браузере: все уже внутри, интернет не нужен. Для встраивания размести файл в своем проекте и используй iframe с sandbox=\"allow-scripts\", width=\"100%\", height=\"640\" и style=\"border:0;display:block\". Например, src=\"./diamonds/cushion.html\". Можно использовать карточку 320 × 240 px; крупное превью показывает управление ракурсом. Перетаскивание или стрелки вращают камень, Home сбрасывает положение. Автоповорот начинается через 2 секунды, reduced motion его отключает. Каждый экземпляр размещай в отдельном iframe."
+    },
+    {
+      "id": "princess",
+      "title": "Принцесса",
+      "type": "component",
+      "path": "assets/princess.html",
+      "preview": "assets/princess.html",
+      "description": "Бриллиантовая огранка принцесса. Самостоятельный WebGL-ассет: оригинальные свет, материал и цветовая дисперсия, вращение с инерцией и мягкий автоповорот.",
+      "usage": "Скачай assets/princess.html и открой в браузере: все уже внутри, интернет не нужен. Для встраивания размести файл в своем проекте и используй iframe с sandbox=\"allow-scripts\", width=\"100%\", height=\"640\" и style=\"border:0;display:block\". Например, src=\"./diamonds/princess.html\". Можно использовать карточку 320 × 240 px; крупное превью показывает управление ракурсом. Перетаскивание или стрелки вращают камень, Home сбрасывает положение. Автоповорот начинается через 2 секунды, reduced motion его отключает. Каждый экземпляр размещай в отдельном iframe."
+    },
+    {
+      "id": "emerald",
+      "title": "Изумруд",
+      "type": "component",
+      "path": "assets/emerald.html",
+      "preview": "assets/emerald.html",
+      "description": "Изумрудная ступенчатая огранка. Самостоятельный WebGL-ассет: оригинальные свет, материал и цветовая дисперсия, вращение с инерцией и мягкий автоповорот.",
+      "usage": "Скачай assets/emerald.html и открой в браузере: все уже внутри, интернет не нужен. Для встраивания размести файл в своем проекте и используй iframe с sandbox=\"allow-scripts\", width=\"100%\", height=\"640\" и style=\"border:0;display:block\". Например, src=\"./diamonds/emerald.html\". Можно использовать карточку 320 × 240 px; крупное превью показывает управление ракурсом. Перетаскивание или стрелки вращают камень, Home сбрасывает положение. Автоповорот начинается через 2 секунды, reduced motion его отключает. Каждый экземпляр размещай в отдельном iframe."
+    },
+    {
+      "id": "radiant",
+      "title": "Радиант",
+      "type": "component",
+      "path": "assets/radiant.html",
+      "preview": "assets/radiant.html",
+      "description": "Бриллиантовая огранка радиант. Самостоятельный WebGL-ассет: оригинальные свет, материал и цветовая дисперсия, вращение с инерцией и мягкий автоповорот.",
+      "usage": "Скачай assets/radiant.html и открой в браузере: все уже внутри, интернет не нужен. Для встраивания размести файл в своем проекте и используй iframe с sandbox=\"allow-scripts\", width=\"100%\", height=\"640\" и style=\"border:0;display:block\". Например, src=\"./diamonds/radiant.html\". Можно использовать карточку 320 × 240 px; крупное превью показывает управление ракурсом. Перетаскивание или стрелки вращают камень, Home сбрасывает положение. Автоповорот начинается через 2 секунды, reduced motion его отключает. Каждый экземпляр размещай в отдельном iframe."
+    },
+    {
+      "id": "asscher",
+      "title": "Ашер",
+      "type": "component",
+      "path": "assets/asscher.html",
+      "preview": "assets/asscher.html",
+      "description": "Ступенчатая огранка ашер. Самостоятельный WebGL-ассет: оригинальные свет, материал и цветовая дисперсия, вращение с инерцией и мягкий автоповорот.",
+      "usage": "Скачай assets/asscher.html и открой в браузере: все уже внутри, интернет не нужен. Для встраивания размести файл в своем проекте и используй iframe с sandbox=\"allow-scripts\", width=\"100%\", height=\"640\" и style=\"border:0;display:block\". Например, src=\"./diamonds/asscher.html\". Можно использовать карточку 320 × 240 px; крупное превью показывает управление ракурсом. Перетаскивание или стрелки вращают камень, Home сбрасывает положение. Автоповорот начинается через 2 секунды, reduced motion его отключает. Каждый экземпляр размещай в отдельном iframe."
+    },
+    {
+      "id": "trillion",
+      "title": "Триллион",
+      "type": "component",
+      "path": "assets/trillion.html",
+      "preview": "assets/trillion.html",
+      "description": "Треугольная бриллиантовая огранка. Самостоятельный WebGL-ассет: оригинальные свет, материал и цветовая дисперсия, вращение с инерцией и мягкий автоповорот.",
+      "usage": "Скачай assets/trillion.html и открой в браузере: все уже внутри, интернет не нужен. Для встраивания размести файл в своем проекте и используй iframe с sandbox=\"allow-scripts\", width=\"100%\", height=\"640\" и style=\"border:0;display:block\". Например, src=\"./diamonds/trillion.html\". Можно использовать карточку 320 × 240 px; крупное превью показывает управление ракурсом. Перетаскивание или стрелки вращают камень, Home сбрасывает положение. Автоповорот начинается через 2 секунды, reduced motion его отключает. Каждый экземпляр размещай в отдельном iframe."
+    }
+  ]
+}

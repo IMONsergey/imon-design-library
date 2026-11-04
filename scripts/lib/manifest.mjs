@@ -62,7 +62,7 @@ function sourceUrl(value, context) {
 
 export function validateManifest(manifest, expected = {}) {
   const c = expected.context || 'manifest';
-  const fields = ['schemaVersion', 'id', 'version', 'title', 'summary', 'category', 'status', 'visibility', 'tags', 'license', 'source', 'review', 'preview', 'scripts', 'files', 'assets'];
+  const fields = ['schemaVersion', 'id', 'version', 'title', 'summary', 'category', 'folder', 'status', 'visibility', 'tags', 'license', 'source', 'review', 'preview', 'scripts', 'autoplay', 'files', 'assets'];
   object(manifest, c, fields, ['schemaVersion', 'id', 'version', 'title', 'summary', 'category', 'status', 'visibility', 'tags', 'license', 'source', 'scripts', 'files', 'assets']);
   check(manifest.schemaVersion === 1, c, 'schemaVersion must be 1');
   check(isSlug(manifest.id), c, 'id must be a lowercase ASCII slug (max 80 characters)');
@@ -72,9 +72,15 @@ export function validateManifest(manifest, expected = {}) {
   string(manifest.title, `${c}.title`, 120);
   string(manifest.summary, `${c}.summary`, 1000);
   oneOf(manifest.category, CATEGORIES, `${c}.category`);
+  if (manifest.folder !== undefined) {
+    object(manifest.folder, `${c}.folder`, ['id', 'title'], ['id', 'title']);
+    check(isSlug(manifest.folder.id), `${c}.folder.id`, 'must be a lowercase ASCII slug (max 80 characters)');
+    string(manifest.folder.title, `${c}.folder.title`, 120);
+  }
   oneOf(manifest.status, ['draft', 'published'], `${c}.status`);
   oneOf(manifest.visibility, ['public', 'private'], `${c}.visibility`);
   check(typeof manifest.scripts === 'boolean', c, 'scripts must be a boolean');
+  if (manifest.autoplay !== undefined) check(typeof manifest.autoplay === 'boolean', c, 'autoplay must be a boolean');
   array(manifest.tags, `${c}.tags`, 20);
   manifest.tags.forEach((tag, i) => string(tag, `${c}.tags[${i}]`, 48));
   unique(manifest.tags, `${c}.tags`);
@@ -98,6 +104,10 @@ export function validateManifest(manifest, expected = {}) {
     const date = new Date(`${manifest.review.date}T00:00:00Z`);
     check(Number.isFinite(date.valueOf()) && date.toISOString().slice(0, 10) === manifest.review.date, c, 'review.date is not a real date');
   }
+  if (manifest.autoplay === true) {
+    check(manifest.scripts === true, c, 'autoplay=true requires scripts=true');
+    check(Boolean(manifest.review), c, 'autoplay=true requires review.by and review.date');
+  }
   if (manifest.preview !== undefined) {
     safeRelativePath(manifest.preview, `${c}.preview`);
     check(/\.html?$/.test(manifest.preview), c, 'preview must be a local HTML file');
@@ -118,7 +128,7 @@ export function validateManifest(manifest, expected = {}) {
   const ids = [];
   for (const [index, asset] of manifest.assets.entries()) {
     const a = `${c}.assets[${index}]`;
-    object(asset, a, ['id', 'title', 'type', 'path', 'description', 'usage'], ['id', 'title', 'type', 'path', 'description', 'usage']);
+    object(asset, a, ['id', 'title', 'type', 'path', 'preview', 'description', 'usage'], ['id', 'title', 'type', 'path', 'description', 'usage']);
     check(isSlug(asset.id), a, 'id must be a lowercase ASCII slug');
     ids.push(asset.id);
     string(asset.title, `${a}.title`, 120);
@@ -127,6 +137,11 @@ export function validateManifest(manifest, expected = {}) {
     oneOf(asset.type, ASSET_TYPES, `${a}.type`);
     safeRelativePath(asset.path, `${a}.path`);
     check(listed.has(asset.path), a, 'asset.path must be included in files');
+    if (asset.preview !== undefined) {
+      safeRelativePath(asset.preview, `${a}.preview`);
+      check(/\.html?$/.test(asset.preview), a, 'asset.preview must be a local HTML file');
+      check(listed.has(asset.preview), a, 'asset.preview must be included in files');
+    }
   }
   unique(ids, `${c}.assets.id`);
   if (manifest.status === 'published') {

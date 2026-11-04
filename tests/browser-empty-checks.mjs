@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 
 // Public empty catalogs are intentional. Never populate them just to pass QA.
-export async function verifyEmptyCatalog({ page, context, navigation, engine, chooseTheme, appearance, shot, noOverflow, checks, viewports, activeTabLinked, poll, settle }) {
-  const empty = page.getByRole('heading', { name: 'Пока нет паков', exact: true });
+export async function verifyEmptyCatalog({ page, context, navigation, engine, chooseTheme, appearance, shot, noOverflow, checks, viewports, poll, settle }) {
+  const empty = page.getByRole('heading', { name: 'Пока нет коллекций', exact: true });
   const add = () => page.getByRole('button', { name: 'Как добавить', exact: true });
+  const nav = page.getByRole('navigation', { name: 'Библиотека', exact: true });
+  const all = nav.getByRole('link', { name: /^Все коллекции/ });
+  const favorites = nav.getByRole('link', { name: /^Избранное/ });
   await empty.waitFor();
-  assert.equal(await page.locator('.pack-card, iframe, .sidebar-categories').count(), 0);
+  assert.equal(await page.locator('.pack-card, iframe, .sidebar-folders').count(), 0);
   assert.equal(await page.getByRole('textbox', { name: 'Поиск по библиотеке' }).count(), 0, 'Do not show a nonfunctional search over an empty library');
   assert.equal(await page.locator('.filter-button, .sort-select, .view-switch').count(), 0);
   assert.equal(await add().count(), 1, 'One useful action, not repeated add buttons');
@@ -13,7 +16,9 @@ export async function verifyEmptyCatalog({ page, context, navigation, engine, ch
   const logo = page.locator('.brand-logo');
   assert.equal(await logo.getAttribute('viewBox'), '0 0 1496 481');
   assert.ok((await logo.locator('path').getAttribute('d')).startsWith('M1495.1 0H0V480.311H1495.1V0Z'), 'Use the original official logo geometry');
-  await activeTabLinked(page.getByRole('tablist', { name: 'Коллекция' }));
+  assert.equal(await all.getAttribute('aria-current'), 'page');
+  assert.equal(await page.getByRole('heading', { level: 1 }).count(), 1);
+  assert.equal(await page.locator('.pack-detail').count(), 0, 'There is no collection modal');
   const nonce = await page.locator('meta[name="csp-nonce"]').getAttribute('content');
   assert.match(nonce, /^[A-Za-z0-9+/]{20,}={0,2}$/);
   const csp = navigation.headers()['content-security-policy'] || '';
@@ -48,13 +53,14 @@ export async function verifyEmptyCatalog({ page, context, navigation, engine, ch
   await appearance('light');
   checks.push('empty-theme-persistence');
 
-  const tabs = page.getByRole('tablist', { name: 'Коллекция' });
-  await tabs.getByRole('tab', { name: /^Все паки/ }).focus();
-  await page.keyboard.press('ArrowDown');
-  await page.getByRole('heading', { name: 'Нет сохраненных паков', exact: true }).waitFor();
-  await activeTabLinked(tabs);
+  await favorites.focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('heading', { name: 'Нет сохраненных коллекций', exact: true }).waitFor();
+  assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('view'), 'favorites');
+  assert.equal(await favorites.getAttribute('aria-current'), 'page');
+  await poll('Keyboard navigation focuses the page title', () => page.locator('.page-title').evaluate(node => document.activeElement === node));
   assert.equal(await page.getByRole('heading', { name: 'Ничего не нашлось', exact: true }).count(), 0);
-  await page.getByRole('button', { name: 'Все паки', exact: true }).click();
+  await all.click();
   await empty.waitFor();
   checks.push('separate-empty-favorites-and-keyboard-navigation');
 
@@ -63,7 +69,8 @@ export async function verifyEmptyCatalog({ page, context, navigation, engine, ch
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
       await settle();
-      await poll('Tab orientation follows the visible layout', async () => (await tabs.getAttribute('aria-orientation')) === (viewport.width <= 680 ? 'horizontal' : 'vertical'));
+      assert.equal(await all.getAttribute('aria-current'), 'page');
+      assert.ok(await all.isVisible() && await favorites.isVisible(), 'Sidebar links remain usable at this viewport');
       await noOverflow(`empty-${theme}-${viewport.width}`);
       const logoBox = await logo.boundingBox();
       assert.ok(logoBox && logoBox.width > 50 && Math.abs(logoBox.width / logoBox.height - 1496 / 481) < 0.02, 'Official logo proportions are preserved');
@@ -89,8 +96,11 @@ export async function verifyEmptyCatalog({ page, context, navigation, engine, ch
   }
   await page.goto('about:blank');
   await page.goto(new URL('/#pack=interface-foundation@1.0.0', navigation.url()).href, { waitUntil: 'networkidle' });
+  await page.getByRole('heading', { name: 'Страница не найдена', exact: true }).waitFor();
+  assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('pack'), 'interface-foundation@1.0.0', 'Missing routes remain explicit, not silently replaced');
+  assert.equal(await page.locator('.collection-page, .asset-page, .pack-detail, iframe').count(), 0);
+  await all.click();
   await empty.waitFor();
-  await poll('Withdrawn deep link is cleared', () => !new URL(page.url()).hash);
-  assert.equal(await page.locator('.pack-detail, iframe').count(), 0);
+  await poll('All collections link returns to the root', () => !new URL(page.url()).hash);
   checks.push('withdrawn-deep-link');
 }

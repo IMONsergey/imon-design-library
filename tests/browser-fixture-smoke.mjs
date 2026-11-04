@@ -35,18 +35,19 @@ function readTrustedUi() {
   return outputs;
 }
 
-function preparePack(draft, { title, category, tags, script = false, documented = false }) {
+function preparePack(draft, { title, category, tags, script = false, autoplay = false, documented = false }) {
   const { id, version } = draft.manifest;
   const manifest = {
     ...draft.manifest,
-    title, category, tags, scripts: script,
+    title, category, tags, scripts: script, autoplay,
+    folder: { id: 'visual', title: 'Visual' },
     summary: `Временные данные браузерного теста ${id}, версия ${version}. Не содержимое библиотеки.`,
     status: 'published', visibility: 'public',
     source: { type: 'original', author: 'Disposable browser regression test' },
     license: { id: 'LicenseRef-Test-Fixture', file: 'LICENSE.txt', redistribution: true },
     review: { by: 'Automated local test fixture only', date: '2026-11-04' },
     assets: [{
-      id: 'tokens', title: 'Тестовые токены', type: 'tokens', path: 'tokens.css',
+      id: 'tokens', title: 'Тестовые токены', type: 'tokens', path: 'tokens.css', preview: 'preview/index.html',
       description: `Локальные стили версии ${version} для проверки исходников и превью.`,
       usage: `Используется только внутри временного контейнера .${id}. Не публиковать.`,
     }],
@@ -61,9 +62,9 @@ function preparePack(draft, { title, category, tags, script = false, documented 
   if (script) {
     manifest.files = [...manifest.files, 'preview/run.js'];
     manifest.assets.push({
-      id: 'interaction', title: 'Тестовый сценарий', type: 'script', path: 'preview/run.js',
+      id: 'interaction', title: 'Тестовый сценарий', type: 'script', path: 'preview/run.js', preview: 'preview/index.html',
       description: 'Безопасное локальное изменение собственного документа превью.',
-      usage: 'Запускать только в sandbox после явного нажатия пользователя.',
+      usage: 'Запускать только в sandbox при наличии явно проверенного autoplay. Старые версии остаются неактивными.',
     });
     fs.writeFileSync(path.join(draft.directory, 'preview/run.js'), 'document.body.dataset.fixtureReady = "true";\n');
   }
@@ -84,9 +85,12 @@ export function createBrowserFixture() {
     preparePack(createDraft(fixture.root, { id: 'qa-browser-motion', version: '1.0.0' }), {
       title: 'Бета: временный тест', category: 'motion', tags: ['qa', 'motion'], script: true, documented: true,
     });
+    preparePack(createDraft(fixture.root, { id: 'qa-browser-motion', version: '2.0.0' }), {
+      title: 'Бета: временный тест', category: 'motion', tags: ['qa', 'motion'], script: true, autoplay: true, documented: true,
+    });
     const built = buildLibrary(fixture.root, { revision: 'local' });
     assert.equal(built.output, path.join(fixture.root, 'dist'));
-    assert.equal(built.catalog.packs.length, 3, 'Fixture contains two packs and a real previous version');
+    assert.equal(built.catalog.packs.length, 4, 'Two collections include static, reviewed autoplay, and inactive legacy versions');
     assert.equal(new Set(built.catalog.packs.map(pack => pack.id)).size, 2);
     const generatedCatalog = fs.readFileSync(path.join(built.output, 'api/catalog.json'));
     for (const file of ui) {
@@ -100,6 +104,15 @@ export function createBrowserFixture() {
       assert.ok(fs.statSync(path.join(built.output, pack.previewUrl.slice(1))).isFile());
       assert.ok(fs.statSync(path.join(built.output, pack.downloadUrl.slice(1))).isFile());
       for (const file of pack.files) assert.ok(fs.statSync(path.join(built.output, file.url.slice(1))).isFile());
+      assert.deepEqual(pack.folder, { id: 'visual', title: 'Visual' });
+      for (const asset of pack.assets) {
+        assert.equal(asset.url, `/raw/${pack.id}/${pack.version}/${asset.path}`);
+        assert.ok(fs.statSync(path.join(built.output, asset.url.slice(1))).isFile());
+        if (asset.previewUrl) {
+          assert.equal(asset.previewUrl, `/previews/${pack.id}/${pack.version}/preview/index.html`);
+          assert.ok(fs.statSync(path.join(built.output, asset.previewUrl.slice(1))).isFile());
+        }
+      }
     }
     return { ...fixture, ...built };
   } catch (error) {
@@ -115,7 +128,7 @@ async function run() {
     delete env.LIBRARY_URL;
     // Screenshots are intentionally retained outside the disposable fixture.
     if (env.SCREENSHOTS_DIR) env.SCREENSHOTS_DIR = path.resolve(env.SCREENSHOTS_DIR);
-    console.log(JSON.stringify({ runner: 'browser-fixture-smoke', localOnly: true, packs: 2, versions: 3, productionCatalogUntouched: true }));
+    console.log(JSON.stringify({ runner: 'browser-fixture-smoke', localOnly: true, packs: 2, versions: 4, productionCatalogUntouched: true }));
     const result = await new Promise((resolve, reject) => {
       const child = spawn(process.execPath, [path.join(projectRoot, 'tests/browser-smoke.mjs')], {
         cwd: fixture.root, env, stdio: 'inherit',

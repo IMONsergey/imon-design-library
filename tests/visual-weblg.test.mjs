@@ -17,12 +17,13 @@ test('Visual WebLG preserves the owner-provided source byte for byte', () => {
   assert.match(preview, /<meta name="viewport" content="width=device-width, initial-scale=1">/);
 });
 
-test('Visual WebLG is one independently namespaced, manually launched asset', () => {
+test('Historical Visual WebLG remains one isolated asset without automatic launch approval', () => {
   const packs = loadLibrary(root.pathname);
   const pack = packs.find(item => item.manifest.id === 'visual-weblg' && item.manifest.version === '1.0.0');
   assert.ok(pack);
   assert.equal(pack.manifest.title, 'Visual WebLG');
   assert.equal(pack.manifest.scripts, true);
+  assert.notEqual(pack.manifest.autoplay, true);
   assert.equal(pack.manifest.assets.length, 1);
   assert.equal(pack.manifest.assets[0].path, 'diamond-cut-study-restored.html');
   assert.equal(pack.manifest.source.author, 'Сергей Отческов / I’MON');
