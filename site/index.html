@@ -3,62 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csp-nonce" content="__IMON_CSP_NONCE__">
   <meta name="description" content="I’MON Design Library. Независимые паки веб-ассетов, дизайн-систем и правил.">
-  <meta name="theme-color" content="#f5f5f1">
+  <meta name="theme-color" content="#fafafa">
   <title>I’MON / Design Library</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script src="/theme-init.js"></script>
   <link rel="stylesheet" href="/app.css">
   <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <a class="skip-link" href="#catalog">К каталогу</a>
-  <button id="nav-shade" class="nav-shade" aria-label="Закрыть навигацию" hidden></button>
-  <aside id="sidebar" class="sidebar" aria-label="Навигация библиотеки">
-    <button id="close-nav" class="icon-button close-nav" aria-label="Закрыть навигацию"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
-    <a class="brand" href="/" aria-label="I’MON Design Library, главная">I’MON<span>design library</span></a>
-    <div class="nav-label">Библиотека</div>
-    <nav id="categories" class="categories" aria-label="Категории"></nav>
-    <div class="sidebar-bottom">
-      <button id="how-to" class="add-button"><span class="plus" aria-hidden="true">+</span> Добавить через чат</button>
-      <p class="sidebar-note">Разные системы.<br>Свои правила. Один каталог.</p>
-      <a class="quiet-link" href="https://github.com/IMONsergey/imon-design-library" target="_blank" rel="noopener noreferrer">Репозиторий <span aria-hidden="true">↗</span></a>
-    </div>
-  </aside>
-  <main class="main" id="catalog">
-    <header class="topbar">
-      <button id="menu-button" class="icon-button menu-button" aria-label="Открыть навигацию" aria-expanded="false" aria-controls="sidebar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-      <span class="breadcrumb">Ресурсы <span>/</span> Каталог</span>
-      <a class="quiet-link top-docs" href="https://github.com/IMONsergey/imon-design-library/blob/main/docs/ADDING_ASSETS.md" target="_blank" rel="noopener noreferrer">Как это работает <span aria-hidden="true">↗</span></a>
-    </header>
-    <section class="catalog-heading" aria-labelledby="page-title">
-      <div><p class="eyebrow">I’MON COLLECTION</p><h1 id="page-title">Библиотека</h1><p class="intro">То, что стоит сохранить. И использовать снова.</p></div>
-      <p id="totals" class="totals" aria-live="polite">Загружаем каталог</p>
-    </section>
-    <div class="search-line">
-      <div class="search-wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><label class="sr-only" for="search">Поиск по библиотеке</label><input id="search" type="search" autocomplete="off" placeholder="Найти пак, компонент или правило"><kbd aria-hidden="true">/</kbd></div>
-      <button id="clear-search" class="text-button" hidden>Сбросить</button>
-    </div>
-    <div id="tags" class="tags" aria-label="Фильтр по тегам"></div>
-    <div class="catalog-toolbar">
-      <h2><span id="section-title">Все паки</span> <span id="result-count" class="count">0</span></h2>
-      <div class="toolbar-right"><label class="sr-only" for="sort">Порядок паков</label><select id="sort"><option value="title">По названию</option><option value="category">По категории</option></select><div class="view-switch" aria-label="Вид каталога"><button id="grid-view" class="icon-button selected" aria-label="Плитка" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg></button><button id="list-view" class="icon-button" aria-label="Список" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></svg></button></div></div>
-    </div>
-    <div id="status" class="status" role="status"><span class="loading-dot"></span><h3>Собираем библиотеку</h3><p>Загружаем список паков и файлов.</p></div>
-    <div id="pack-grid" class="pack-grid" aria-live="polite"></div>
-    <footer class="catalog-footer"><span>Каждый пак независим. Каждая версия сохранена.</span><a href="/api/catalog.json">JSON-каталог <span aria-hidden="true">↗</span></a></footer>
-    <noscript><p class="noscript">Для поиска и превью нужен JavaScript. Все файлы доступны в <a href="https://github.com/IMONsergey/imon-design-library">репозитории</a>.</p></noscript>
-  </main>
-
-  <dialog id="pack-dialog" class="pack-dialog" aria-labelledby="pack-title">
-    <header class="dialog-header"><div><p id="pack-category" class="eyebrow"></p><h2 id="pack-title"></h2></div><div class="dialog-header-actions"><label class="sr-only" for="version-select">Версия пака</label><select id="version-select" aria-label="Версия пака"></select><button id="close-pack" class="icon-button" aria-label="Закрыть пак"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></header>
-    <div class="detail-bar"><div class="detail-tabs" role="tablist" aria-label="Содержание пака"><button id="tab-preview" role="tab" aria-controls="panel-preview" aria-selected="true" data-panel="preview">Превью</button><button id="tab-files" role="tab" aria-controls="panel-files" aria-selected="false" data-panel="files" tabindex="-1">Файлы и код</button><button id="tab-guide" role="tab" aria-controls="panel-guide" aria-selected="false" data-panel="guide" tabindex="-1">Описание и правила</button></div><a id="download-pack" class="download-button" download>Скачать пак <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4"/></svg></a></div>
-    <section id="panel-preview" role="tabpanel" aria-labelledby="tab-preview" class="detail-panel preview-panel"><div class="preview-toolbar"><span id="preview-label">Изолированное превью</span><div class="preview-sizes"><button id="preview-desktop" class="text-button active" aria-pressed="true">Широкое</button><button id="preview-mobile" class="text-button" aria-pressed="false">390 px</button></div></div><div id="preview-stage" class="preview-stage"></div><p class="preview-note">Стили и код этого пака не подключаются к каталогу.</p></section>
-    <section id="panel-files" role="tabpanel" aria-labelledby="tab-files" class="detail-panel file-panel" hidden><nav id="file-list" class="file-list" aria-label="Файлы пака"></nav><div class="code-area"><div class="code-toolbar"><span id="file-name"></span><button id="copy-code" class="text-button" disabled>Копировать код</button></div><pre id="code-view" tabindex="0"><code id="code-content"></code></pre><p id="file-info" class="file-info"></p></div></section>
-    <section id="panel-guide" role="tabpanel" aria-labelledby="tab-guide" class="detail-panel guide-panel" hidden><div id="pack-description" class="guide-intro"></div><div id="asset-list" class="asset-list"></div><div id="provenance" class="provenance"></div></section>
-    <footer class="detail-footer"><span id="pack-meta"></span><button id="copy-context" class="text-button">Копировать контекст для чата <span aria-hidden="true">↗</span></button></footer>
-  </dialog>
-
-  <dialog id="add-dialog" class="add-dialog" aria-labelledby="add-title"><div class="add-heading"><p class="eyebrow">ПОПОЛНЕНИЕ БИБЛИОТЕКИ</p><button id="close-add" class="icon-button" aria-label="Закрыть инструкцию"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><h2 id="add-title">Добавим через чат.</h2><p>Прикрепи материал или дай ссылку. Укажи существующий пак или попроси создать отдельный. Чат подготовит файлы, превью и правила использования.</p><div class="prompt-example">Добавь этот материал в I’MON Design Library. Создай отдельный пак, проверь источник и права, сделай превью и инструкцию. Не смешивай его с другими дизайн-системами.</div><p class="privacy-note">Репозиторий и сайт публичные. Закрытые клиентские материалы сюда не добавляем.</p><button id="copy-prompt" class="primary-button">Скопировать запрос</button><a class="quiet-link" href="https://github.com/IMONsergey/imon-design-library/blob/main/docs/ADDING_ASSETS.md" target="_blank" rel="noopener noreferrer">Полная инструкция <span aria-hidden="true">↗</span></a></dialog>
-  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="root"></div>
+  <noscript><main><h1>I’MON Design Library</h1><p>Для каталога и превью нужен JavaScript. Все исходники доступны в <a href="https://github.com/IMONsergey/imon-design-library">репозитории</a>.</p></main></noscript>
 </body>
 </html>

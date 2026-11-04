@@ -13,7 +13,7 @@ Environment=GIT_CONFIG_GLOBAL=/dev/null
 Environment=GIT_CONFIG_NOSYSTEM=1
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/flock -n /srv/imon-design-library/deploy.lock /opt/imon-runtime/node/bin/node /usr/local/lib/imon-design-library/update.mjs
-TimeoutStartSec=240
+TimeoutStartSec=600
 UMask=0022
 NoNewPrivileges=true
 PrivateTmp=true

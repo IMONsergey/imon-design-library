@@ -15,11 +15,11 @@ function write(directory, relative, data) {
   fs.writeFileSync(target, data, { flag: 'wx', mode: 0o644 });
 }
 
-export function buildLibrary(root = process.cwd(), { revision = process.env.LIBRARY_REVISION || 'local' } = {}) {
+export function buildLibrary(root = process.cwd(), { revision = process.env.LIBRARY_REVISION || 'local', siteRoot } = {}) {
   root = path.resolve(root);
   if (!/^(?:local|[0-9a-f]{7,64})$/.test(revision)) throw new Error('LIBRARY_REVISION must be local or a Git SHA');
   const packs = loadLibrary(root);
-  const site = loadSite(root);
+  const site = loadSite(root, { siteRoot });
   const published = packs.filter(({ manifest }) => manifest.status === 'published' && manifest.visibility === 'public');
   const output = path.join(root, 'dist');
   if (fs.existsSync(output)) {
@@ -88,7 +88,15 @@ export function buildLibrary(root = process.cwd(), { revision = process.env.LIBR
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     if (process.argv.length !== 2) throw new Error('Usage: node scripts/build.mjs (run in project root)');
-    const result = buildLibrary();
+    // Keep the library engine usable without frontend dependencies for fixtures/import tools.
+    // The trusted project CLI builds catalog UI first; packs never enter that compiler.
+    const root = process.cwd();
+    let siteRoot;
+    if (fs.existsSync(path.join(root, 'frontend'))) {
+      const { buildUi } = await import('./build-ui.mjs');
+      ({ output: siteRoot } = await buildUi(root));
+    }
+    const result = buildLibrary(root, { siteRoot });
     console.log(`Built ${result.health.packVersions} published pack versions / ${result.health.assets} assets into dist (${result.excluded} draft/private versions excluded).`);
     if (result.previous) console.log(`Previous build retained at ${path.relative(process.cwd(), result.previous)}.`);
   } catch (error) { console.error(`Build failed: ${error.message}`); process.exitCode = 1; }

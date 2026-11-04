@@ -2,8 +2,17 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile, lstat, realpath } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 
-export const CATALOG_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+// Themes 3.3.0 Select.Content does not forward nonce to its two internal Viewports.
+// These exact static scrollbar-hiding rules are pinned by tests/radix-csp.test.mjs:
+// @radix-ui/react-select 2.4.1 and @radix-ui/react-scroll-area 1.4.0, dist/index.mjs.
+// Dynamic scroll-lock styles still require the fresh request nonce; no broad style allowance.
+export const RADIX_STYLE_HASHES = Object.freeze([
+  'sha256-441zG27rExd4/il+NvIqyL8zFx5XmyNQtE381kSkUJk=',
+  'sha256-vGQdhYJbTuF+M8iCn1IZCHpdkiICocWHDq4qnQF4Rjw=',
+]);
+export const CATALOG_CSP = `default-src 'none'; script-src 'self'; style-src 'self' ${RADIX_STYLE_HASHES.map(hash => `'${hash}'`).join(' ')}; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
 export const PREVIEW_CSP = "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif', '.woff2': 'font/woff2', '.woff': 'font/woff', '.mp4': 'video/mp4', '.webm': 'video/webm', '.zip': 'application/zip', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8' };
 const BASE_HEADERS = {
@@ -32,7 +41,9 @@ export function createStaticServer(root) {
       const isRaw = relative.startsWith('raw/');
       const isDownload = relative.startsWith('downloads/');
       const isApi = relative.startsWith('api/');
-      if (!isPreview && !isRaw && !isDownload && !isApi && !['index.html', 'app.css', 'app.js', 'favicon.svg', 'health.json', 'robots.txt'].includes(relative)) throw new Error('path');
+      const isUiFont = /^ui-assets\/[A-Za-z0-9_-][A-Za-z0-9_.-]*\.woff2$/.test(relative);
+      const isCatalogHtml = relative === 'index.html';
+      if (!isPreview && !isRaw && !isDownload && !isApi && !isUiFont && !['index.html', 'app.css', 'app.js', 'theme-init.js', 'third-party-notices.txt', 'favicon.svg', 'health.json', 'robots.txt'].includes(relative)) throw new Error('path');
       const filename = path.resolve(resolvedRoot, relative);
       if (!filename.startsWith(resolvedRoot + path.sep)) throw new Error('path');
       const actual = await realpath(filename);
@@ -58,10 +69,19 @@ export function createStaticServer(root) {
         if (!relative.endsWith('.json')) throw new Error('path');
         headers['Content-Type'] = 'application/json; charset=utf-8';
       }
-      const body = request.method === 'HEAD' ? undefined : await readFile(filename);
+      let body = request.method === 'HEAD' && !isCatalogHtml ? undefined : await readFile(filename);
+      if (isCatalogHtml) {
+        const nonce = randomBytes(18).toString('base64');
+        const html = body.toString('utf8');
+        if (html.split('__IMON_CSP_NONCE__').length > 2) throw new Error('nonce');
+        body = Buffer.from(html.replace('__IMON_CSP_NONCE__', nonce));
+        headers['Content-Security-Policy'] = CATALOG_CSP.replace("style-src 'self'", `style-src 'self' 'nonce-${nonce}'`);
+        headers['Cache-Control'] = 'no-store';
+      }
+      if (isUiFont) headers['Cache-Control'] = 'public, max-age=31536000, immutable';
       headers['Content-Length'] = body ? body.length : info.size;
       response.writeHead(200, headers);
-      response.end(body);
+      response.end(request.method === 'HEAD' ? undefined : body);
     } catch {
       response.writeHead(404, { ...BASE_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' });
       response.end('Not found');

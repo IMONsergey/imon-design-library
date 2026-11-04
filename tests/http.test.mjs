@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createStaticServer } from '../scripts/serve.mjs';
+import { createStaticServer, RADIX_STYLE_HASHES } from '../scripts/serve.mjs';
 
 test('static transport keeps previews sandboxed and raw HTML inert', async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'imon-idl-http-'));
@@ -36,4 +36,55 @@ test('static transport keeps previews sandboxed and raw HTML inert', async t => 
   for (const url of ['/secret.env', '/.git/config', '/raw/test/1.0.0/link.txt', '/raw/%2e%2e%2fsecret.env', '/raw/%00', '/raw/test/1.0.0/', '/api/not-json.txt']) {
     assert.equal((await fetch(origin + url)).status, 404, url);
   }
+});
+
+test('catalog gets a fresh matching style nonce without changing preview HTML or script policy', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'imon-idl-nonce-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const placeholder = '__IMON_CSP_NONCE__';
+  const html = `<html><meta name="csp-nonce" content="${placeholder}"><main>Catalog</main></html>`;
+  await writeFile(path.join(root, 'index.html'), html);
+  await writeFile(path.join(root, 'theme-init.js'), '/* theme bootstrap */');
+  for (const folder of ['previews/test/1.0.0', 'ui-assets']) await mkdir(path.join(root, folder), { recursive: true });
+  await writeFile(path.join(root, 'previews/test/1.0.0/index.html'), html);
+  await writeFile(path.join(root, 'ui-assets/inter-HASH1234.woff2'), 'fixture font');
+  await writeFile(path.join(root, 'ui-assets/rejected.js'), '/* not public */');
+  const server = createStaticServer(root);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const nonces = [];
+  for (const route of ['/', '/index.html']) {
+    const response = await fetch(origin + route);
+    const body = await response.text();
+    const csp = response.headers.get('content-security-policy');
+    const nonce = csp.match(/style-src 'self' 'nonce-([A-Za-z0-9+/]+)'/)[1];
+    nonces.push(nonce);
+    assert.equal(nonce.length, 24);
+    assert.match(body, new RegExp(`content="${nonce.replace(/[+]/g, '\\+')}"`));
+    assert.doesNotMatch(body, /__IMON_CSP_NONCE__/);
+    assert.match(csp, /script-src 'self';/);
+    assert.match(csp, /style-src-attr 'unsafe-inline';/);
+    for (const hash of RADIX_STYLE_HASHES) assert.ok(csp.includes(`'${hash}'`));
+    assert.doesNotMatch(csp.split(';').find(directive => directive.trim().startsWith('style-src ')), /unsafe-inline/);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(Number(response.headers.get('content-length')), Buffer.byteLength(body));
+    assert.doesNotMatch(csp, /script-src[^;]*(?:unsafe|nonce)/);
+  }
+  assert.notEqual(nonces[0], nonces[1]);
+  const head = await fetch(origin, { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+  assert.equal(Number(head.headers.get('content-length')), Buffer.byteLength(html.replace(placeholder, nonces[0])));
+  const preview = await fetch(origin + '/previews/test/1.0.0/index.html');
+  assert.equal(await preview.text(), html);
+  assert.doesNotMatch(preview.headers.get('content-security-policy'), /nonce-/);
+  for (const hash of RADIX_STYLE_HASHES) assert.ok(!preview.headers.get('content-security-policy').includes(hash));
+  assert.match(preview.headers.get('content-security-policy'), /sandbox allow-scripts;/);
+  const font = await fetch(origin + '/ui-assets/inter-HASH1234.woff2');
+  assert.equal(font.status, 200);
+  assert.equal(font.headers.get('content-type'), 'font/woff2');
+  assert.match(font.headers.get('cache-control'), /immutable/);
+  assert.equal((await fetch(origin + '/theme-init.js')).status, 200);
+  assert.equal((await fetch(origin + '/ui-assets/rejected.js')).status, 404);
 });

@@ -1,5 +1,6 @@
 // Installed root-owned; runs as the dedicated unprivileged deployment account.
-// No GitHub token, webhook secret, npm install, or access to other projects.
+// No GitHub token, webhook secret, pack hooks or access to other projects.
+// This controller is installed separately by root; a git change cannot update it.
 import { execFileSync } from 'node:child_process';
 import { mkdir, lstat, realpath, readdir, readlink, readFile, writeFile, rename, symlink, cp } from 'node:fs/promises';
 import path from 'node:path';
@@ -11,7 +12,7 @@ const GIT = path.join(ROOT, 'git');
 const BUILDS = path.join(ROOT, 'builds');
 const RELEASES = path.join(ROOT, 'releases');
 const SHA = /^[0-9a-f]{40}$/;
-const run = (command, args, cwd = ROOT) => execFileSync(command, args, { cwd, encoding: 'utf8', timeout: 180000, maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+const run = (command, args, cwd = ROOT, timeout = 180000) => execFileSync(command, args, { cwd, encoding: 'utf8', timeout, maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const git = args => run('git', args, GIT);
 const exists = async filename => { try { await lstat(filename); return true; } catch (error) { if (error.code === 'ENOENT') return false; throw error; } };
 
@@ -82,6 +83,14 @@ async function deploy() {
   if (!await exists(worktree)) git(['worktree', 'add', '--detach', worktree, target]);
   if (run('git', ['status', '--porcelain', '--untracked-files=no'], worktree)) throw new Error('Build worktree has tracked modifications');
   process.env.LIBRARY_REVISION = target;
+  const hasFrontend = await exists(path.join(worktree, 'frontend'));
+  if (hasFrontend) {
+    if (!await exists(path.join(worktree, 'package-lock.json'))) throw new Error('Frontend requires a committed root package lock');
+    // Invoke npm's JavaScript entry with the same pinned Node runtime, not /usr/bin/node.
+    const npmCli = await realpath(path.join(path.dirname(process.execPath), 'npm'));
+    if (!(await lstat(npmCli)).isFile()) throw new Error('Missing npm CLI next to the Node runtime');
+    console.log(run(process.execPath, [npmCli, 'ci', '--ignore-scripts', '--include=dev', '--include=optional', '--no-audit', '--fund=false', '--cache', path.join(ROOT, 'npm-cache'), '--fetch-retries=1', '--fetch-timeout=60000'], worktree, 300000));
+  }
   for (const args of [['scripts/validate.mjs'], ['--test', ...((await readdir(path.join(worktree, 'tests'))).filter(name => name.endsWith('.test.mjs')).sort().map(name => `tests/${name}`))], ['scripts/build.mjs']]) {
     console.log(run(process.execPath, args, worktree));
   }
@@ -91,7 +100,7 @@ async function deploy() {
   if (catalog.schemaVersion !== 1 || !Array.isArray(catalog.packs)) throw new Error('Invalid built catalog');
   const health = JSON.parse(await readFile(path.join(output, 'health.json'), 'utf8'));
   if (health.status !== 'ok' || health.revision !== target) throw new Error('Build revision does not match candidate commit');
-  for (const file of ['index.html', 'app.css', 'app.js']) if (!(await lstat(path.join(output, file))).isFile()) throw new Error(`Missing ${file}`);
+  for (const file of ['index.html', 'app.css', 'app.js', ...(hasFrontend ? ['theme-init.js', 'third-party-notices.txt'] : [])]) if (!(await lstat(path.join(output, file))).isFile()) throw new Error(`Missing ${file}`);
   const destination = path.join(RELEASES, target);
   if (!await exists(destination)) {
     const staging = path.join(RELEASES, `.staging-${target}-${process.pid}`);

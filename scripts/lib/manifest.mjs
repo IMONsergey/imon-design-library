@@ -292,8 +292,11 @@ export function loadLibrary(root) {
   return result;
 }
 
-export function loadSite(root) {
-  const directory = path.join(path.resolve(root), 'site');
+export function loadSite(root, { siteRoot = path.join(path.resolve(root), 'site') } = {}) {
+  root = path.resolve(root);
+  const directory = path.resolve(root, siteRoot);
+  check([path.join(root, 'site'), path.join(root, '.cache/ui')].includes(directory), 'siteRoot', 'must be site/ or the generated .cache/ui directory');
+  check(fs.realpathSync(directory) === directory, 'siteRoot', 'symlinked source directories are not allowed');
   ensureDirectory(directory, 'site');
   const files = new Map();
   for (const filename of walk(directory, '', { files: [], bytes: 0 }, { files: 256, bytes: 32 * 1024 * 1024 })) {

@@ -1,6 +1,10 @@
 # Shared implementation contract v1
 
-No runtime or build dependencies. Node 24. Static app sources are in `site/`; build output is `dist/`.
+The pack engine has no dependencies and uses Node 24. Trusted catalog source in `frontend/` uses pinned React/Radix Themes dependencies installed from the root lockfile with lifecycle scripts disabled. `scripts/build-ui.mjs` compiles it to `.cache/ui/`, copying only the HTML/favicon/theme bootstrap shell from `site/`. `scripts/build.mjs` then produces static `dist/`; its programmatic `buildLibrary(root, {siteRoot})` defaults to `site/` so pack engine fixtures stay dependency-free. The only alternate siteRoot is `.cache/ui/`. No pack code is imported into the catalog bundle.
+
+The UI output contract is `index.html`, `app.js`, `app.css`, `favicon.svg`, `theme-init.js`, generated `third-party-notices.txt` and optional hashed WOFF2 files under `ui-assets/`. Notices include the licenses of bundled dependencies, not npm configuration or private metadata. Catalog HTML contains one `<meta name="csp-nonce" content="__IMON_CSP_NONCE__">`, replaced by a fresh request nonce by the HTTP server; it is never a fixed authorization value. Scripts remain same-origin-only. This catalog transport exception does not change any preview, raw-file or published-pack contract below.
+
+Catalog inline style elements require the request nonce, except for two exact SHA-256-authorized scrollbar-hiding rules emitted by the pinned Radix Select/ScrollArea viewports. Themes 3.3.0 does not forward a nonce to these internal viewports. Their text, pinned versions and HTTP policy are covered by `tests/radix-csp.test.mjs`; changed library styles require explicit review. There is no broad `unsafe-inline` permission for catalog style elements. Catalog style attributes have a separate narrow `style-src-attr` allowance. Neither exception applies to pack previews or raw downloads.
 
 ## Source manifest: packs/<id>/<version>/manifest.json
 

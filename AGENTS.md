@@ -8,7 +8,8 @@
 - Only explicitly published public manifests with documented sources and redistribution permission enter the static site. A draft in GitHub is still public; private files must remain out of git entirely.
 - Previews use sandboxed iframes without `allow-same-origin`, top navigation, popups, forms, downloads or network capabilities. Keep a restrictive HTTP CSP for direct preview URLs too.
 - The catalog never imports a pack stylesheet or JavaScript into its own document. Render metadata as text, never as HTML. Validate all path and URL inputs.
-- Use dependency-free Node.js 24 tooling and static HTML/CSS/JavaScript for this foundation. Tests use `node:test`. No cloud database or paid services.
+- The pack engine remains dependency-free Node.js 24 and uses `node:test`. The user-authorized catalog redesign uses pinned React, Radix Themes and esbuild dependencies from the root package lock. Install only the trusted root with `npm ci --ignore-scripts --include=dev --include=optional`; never install or execute pack hooks. No cloud database or paid services.
+- Catalog sources in `frontend/` compile to generated `.cache/ui/`, then the existing static builder writes `dist/`. Keep package contents out of the frontend bundle and preserve preview/raw CSP. Catalog-only dynamic styles require per-request nonces; never use a fixed nonce or relax script CSP.
 - Make local edits using apply_patch. Do not overwrite unrelated work. Do not commit build output, caches, screenshots or operational secrets.
 - Russian interface, concise copy, no `ё`, no long dash. Neutral off-white/charcoal palette, precise spacing, restrained motion, accessible contrast, keyboard navigation, mobile and Safari compatibility.
 - Run `npm test`, `npm run validate`, `npm run build` and a browser smoke test before publishing. Keep the deployment atomic and retain the last successful release for rollback.
