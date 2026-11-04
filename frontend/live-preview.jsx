@@ -7,7 +7,7 @@ function PreviewFrame({ src, title, scripts, interactive }) {
   return <div className="preview-surface" data-preview-status={failed ? 'error' : loaded ? 'ready' : 'loading'}>
     <iframe src={src} title={title} sandbox={scripts ? 'allow-scripts' : ''} referrerPolicy="no-referrer"
       tabIndex={interactive ? 0 : -1} loading="eager" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
-    {(!loaded || failed) && <span className="preview-loading" aria-hidden="true">{failed ? 'Превью недоступно' : 'Загрузка превью'}</span>}
+    {(!loaded || failed) && <span className="preview-loading" aria-hidden="true">{failed ? 'Превью недоступно' : 'Загрузка'}</span>}
   </div>;
 }
 
@@ -56,7 +56,7 @@ export const LivePreview = memo(function LivePreview({ src, title, scripts = fal
   return <div ref={host} className={'live-preview ' + className} data-mounted={String(mounted)}
     data-preview-policy={!src ? 'missing' : allowed ? 'automatic' : 'restricted'} aria-hidden={!interactive || undefined} inert={!interactive}>
     {mounted ? <PreviewFrame key={src} src={src} title={title} scripts={scripts} interactive={interactive} />
-      : !allowed ? <div className="preview-restricted"><span>{src ? 'Автопросмотр не разрешен' : 'Без превью'}</span><small>Исходник доступен для скачивания</small></div>
-        : <span className="preview-idle" aria-hidden="true">Превью</span>}
+      : !allowed ? <div className="preview-restricted"><span>Без превью</span></div>
+        : <span className="preview-idle" aria-hidden="true" />}
   </div>;
 });

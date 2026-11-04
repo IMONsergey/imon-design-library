@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { createStaticServer } from '../scripts/serve.mjs';
 import { verifyEmptyCatalog } from './browser-empty-checks.mjs';
+import { assertCatalogControls, assertStableLinks, assertLatestResourceRequests, verifyLatestRouting } from './browser-latest.mjs';
 
 const moduleName = process.env.PLAYWRIGHT_MODULE || 'playwright';
 const playwright = await import(moduleName.startsWith('/') ? pathToFileURL(moduleName).href : moduleName);
@@ -19,7 +20,7 @@ const executablePath = { chromium: process.env.CHROME_BIN, firefox: process.env.
 const screenshots = process.env.SCREENSHOTS_DIR ? path.resolve(process.env.SCREENSHOTS_DIR) : null;
 if (screenshots) await mkdir(screenshots, { recursive: true });
 const categoryLabels = new Map([['design-system', 'Дизайн-системы'], ['components', 'Компоненты'], ['motion', 'Движение'], ['icons', 'Иконки'], ['typography', 'Типографика'], ['guidelines', 'Правила'], ['templates', 'Шаблоны']]);
-const errors = [], consoleErrors = [], cspErrors = [], external = [], httpErrors = [], requestFailures = [], checks = [], screenshotFiles = [], skipped = [];
+const errors = [], consoleErrors = [], cspErrors = [], external = [], httpErrors = [], requestFailures = [], resourceRequests = [], checks = [], screenshotFiles = [], skipped = [];
 const keyOf = pack => `${pack.id}@${pack.version}`;
 const digest = value => createHash('sha256').update(value).digest('hex');
 const byTitle = (a, b) => a.title.localeCompare(b.title, 'ru');
@@ -39,7 +40,7 @@ async function poll(label, callback, timeout = 12000) {
 }
 async function settle() { await page.evaluate(async () => { await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); }); }
 const cards = () => page.locator('.catalog-results:visible .pack-card');
-const card = pack => cards().filter({ has: page.locator(`.pack-link[href="#pack=${keyOf(pack)}"]`) });
+const card = pack => cards().filter({ has: page.locator(`.pack-link[href="#pack=${pack.id}"]`) });
 const collectionPage = () => page.locator('.collection-page');
 const assetPage = () => page.locator('.asset-page');
 const assetCard = asset => collectionPage().locator(`.asset-card[data-asset="${asset.id}"]`);
@@ -89,17 +90,17 @@ async function chooseTheme(value) {
 }
 async function selectSort(name) { await page.locator('.sort-select').click(); await page.getByRole('option', { name, exact: true }).click(); }
 async function openPack(pack) {
-  await card(pack).locator('.pack-link').click(); await waitHash({ pack: keyOf(pack) }); await collectionPage().waitFor();
+  await card(pack).locator('.pack-link').click(); await waitHash({ pack: pack.id }); await collectionPage().waitFor();
   assert.equal(await collectionPage().getAttribute('data-pack'), keyOf(pack)); assert.equal(await page.locator('.page-title').textContent(), pack.title);
   assert.equal(await page.locator('.pack-detail, [role="dialog"]').count(), 0, 'Collection opens inline');
-  await titleFocus(); await activeTabLinked(collectionPage().getByRole('tablist', { name: 'Содержимое коллекции' }));
+  await titleFocus(); await activeTabLinked(collectionPage().getByRole('tablist', { name: 'Содержимое коллекции' })); await assertCatalogControls(page); await assertStableLinks(page);
 }
 async function openAsset(pack, asset) {
   await collectionPage().getByRole('tab', { name: 'Ассеты', exact: true }).click(); await assetCard(asset).locator('.asset-link').click();
-  await waitHash({ pack: keyOf(pack), asset: asset.id }); await assetPage().waitFor();
+  await waitHash({ pack: pack.id, asset: asset.id }); await assetPage().waitFor();
   assert.equal(await assetPage().getAttribute('data-asset'), asset.id); assert.equal(await page.locator('.page-title').textContent(), asset.title);
   assert.equal(await page.locator('.pack-detail, [role="dialog"]').count(), 0, 'Asset opens inline');
-  await titleFocus(); await activeTabLinked(assetPage().getByRole('tablist', { name: 'Данные ассета' }));
+  await titleFocus(); await activeTabLinked(assetPage().getByRole('tablist', { name: 'Данные ассета' })); await assertCatalogControls(page); await assertStableLinks(page);
 }
 async function verifyFrame(locator, pack, url = pack.previewUrl) {
   await locator.waitFor({ state: 'visible' });
@@ -121,7 +122,7 @@ async function readyFile(scope, file) {
 }
 async function collectionFile(pack) {
   const file = pack.files.find(textFileEligible); assert.ok(file, `${pack.id} has a small real text file`);
-  await collectionPage().getByRole('tab', { name: 'Файлы и правила', exact: true }).click();
+  await collectionPage().getByRole('tab', { name: 'Файлы', exact: true }).click();
   assert.equal(await collectionPage().locator('.file-nav .file-item').count(), pack.files.length, 'Collection exposes every allowlisted file'); await readyFile(collectionPage(), file); return file;
 }
 async function downloadFrom(link) {
@@ -133,16 +134,10 @@ async function verifySource(scope, file) {
   const response = await context.request.get(file.url); assert.equal(response.status(), 200); assert.match(response.headers()['content-type'], /^text\/plain/); assert.match(response.headers()['content-disposition'], /attachment/); assert.equal(response.headers()['x-content-type-options'], 'nosniff');
   const expected = await response.text(); assert.equal(await scope.locator('.code-source code').textContent(), expected, 'Displayed source is the original file'); assert.equal(await scope.locator('.code-lines').getAttribute('aria-hidden'), 'true');
   const numbers = (await scope.locator('.code-lines').textContent()).split('\n'); assert.equal(numbers.length, Math.min(expected.split('\n').length, 10000)); assert.equal(numbers[0], '1');
-  const gutter = await scope.locator('.code-lines').boundingBox(), source = await scope.locator('.code-source').boundingBox(); assert.ok(source.x >= gutter.x + gutter.width - 1); assert.equal(await scope.locator('.code-meta [title]').getAttribute('title'), file.sha256);
+  const gutter = await scope.locator('.code-lines').boundingBox(), source = await scope.locator('.code-source').boundingBox(); assert.ok(source.x >= gutter.x + gutter.width - 1); assert.equal(digest(await response.body()), file.sha256, 'Raw response matches the generated checksum without exposing a UI hash badge');
   if (engine === 'chromium') { await scope.getByRole('button', { name: 'Копировать', exact: true }).click(); await poll('Copied file checksum', async () => digest(await page.evaluate(() => navigator.clipboard.readText())) === file.sha256); }
   const downloaded = await downloadFrom(scope.getByRole('link', { name: 'Скачать файл', exact: true })); assert.equal(downloaded.filename, file.path.split('/').at(-1)); assert.equal(digest(downloaded.body), file.sha256);
 }
-async function verifyContext(scope, pack, asset) {
-  if (engine !== 'chromium') return;
-  await scope.getByRole('button', { name: 'Контекст для чата', exact: true }).first().click();
-  await poll('Chat context identifies source/version/license', async () => { const value = await page.evaluate(() => navigator.clipboard.readText()); return value.includes(pack.id) && value.includes(pack.version) && value.includes(`packs/${pack.id}/${pack.version}/`) && value.includes(pack.license.id) && (!asset || value.includes(asset.path)); });
-}
-async function chooseVersion(pack) { await page.getByRole('combobox', { name: 'Версия коллекции', exact: true }).click(); await page.getByRole('option', { name: `v${pack.version}`, exact: true }).click(); }
 
 try {
   base = process.env.LIBRARY_URL;
@@ -154,7 +149,7 @@ try {
   await context.exposeBinding('__imonQaCsp', ({ frame }, violation) => cspErrors.push({ frame: frame.url(), ...violation }));
   await context.addInitScript(() => document.addEventListener('securitypolicyviolation', event => { globalThis.__imonQaCsp({ directive: event.effectiveDirective, blocked: event.blockedURI, disposition: event.disposition, source: event.sourceFile, line: event.lineNumber }).catch(() => {}); }));
   context.on('page', opened => { opened.on('pageerror', error => errors.push({ url: opened.url(), message: error.message })); opened.on('console', message => { if (message.type() === 'error') consoleErrors.push({ url: opened.url(), message: message.text(), location: message.location() }); }); });
-  context.on('request', request => { if (/^https?:/.test(request.url()) && new URL(request.url()).origin !== origin) external.push(request.url()); });
+  context.on('request', request => { if (/^https?:/.test(request.url())) { resourceRequests.push(request.url()); if (new URL(request.url()).origin !== origin) external.push(request.url()); } });
   context.on('response', response => { if (response.status() >= 400) httpErrors.push({ url: response.url(), status: response.status() }); });
   context.on('requestfailed', request => requestFailures.push({ url: request.url(), type: request.resourceType(), error: request.failure()?.errorText }));
   page = await context.newPage(); page.setDefaultTimeout(12000); page.setDefaultNavigationTimeout(30000);
@@ -171,7 +166,7 @@ try {
   } else {
     const primary = latest.find(pack => pack.assets.some(asset => textFileEligible(pack.files.find(file => file.path === asset.path)))) || latest[0];
     const primaryAsset = primary.assets.find(asset => textFileEligible(primary.files.find(file => file.path === asset.path))) || primary.assets[0];
-    await waitCards(latest); assert.equal(Number(await page.locator('.heading-count').innerText()), latest.length); assert.equal(await libraryNav().getByRole('link', { name: /^Все коллекции/ }).getAttribute('aria-current'), 'page');
+    await waitCards(latest); assert.equal(Number(await page.locator('.heading-count').innerText()), latest.length); assert.equal(await libraryNav().getByRole('link', { name: /^Все коллекции/ }).getAttribute('aria-current'), 'page'); await assertCatalogControls(page); await assertStableLinks(page);
     const nonce = await page.locator('meta[name="csp-nonce"]').getAttribute('content'), navigationCsp = navigation.headers()['content-security-policy'] || '';
     assert.match(nonce, /^[A-Za-z0-9+/]{20,}={0,2}$/); assert.ok(navigationCsp.includes(`'nonce-${nonce}'`)); assert.match(navigationCsp, /script-src 'self'(?:;|$)/); assert.ok(!navigationCsp.includes('unsafe-eval')); assert.equal(navigation.headers()['cache-control'], 'no-store');
     const fresh = await context.request.get('/'), freshNonce = (await fresh.text()).match(/<meta\s+name="csp-nonce"\s+content="([^"]+)"/i)?.[1]; assert.ok(freshNonce && freshNonce !== nonce);
@@ -207,40 +202,41 @@ try {
     const folderPack = latest.find(pack => pack.folder);
     if (folderPack) { const link = page.locator(`.folder-nav[data-folder="${folderPack.folder.id}"]`); await link.click(); await waitHash({ folder: folderPack.folder.id }); await waitCards(latest.filter(pack => pack.folder?.id === folderPack.folder.id)); assert.equal(await link.getAttribute('aria-current'), 'page'); assert.equal(await page.locator('.page-title').textContent(), folderPack.folder.title); await titleFocus(); await home(latest); } else skipped.push('No folder metadata; isolated fixtures exercise folder navigation.'); checks.push(phase);
 
-    phase = 'inline-collection-files-downloads-and-versions';
+    phase = 'inline-collection-files-and-integrity';
     await openPack(primary); assert.equal(await collectionPage().locator('.asset-card').count(), primary.assets.length); await verifyAssetPreview(assetCard(primaryAsset), primary, primaryAsset);
     const collectionSearch = page.getByRole('textbox', { name: 'Поиск по коллекции', exact: true }); await collectionSearch.fill('zzzz-missing-asset'); await poll('Collection search scopes results', async () => await collectionPage().locator('.asset-card').count() === 0); await collectionSearch.fill(''); await poll('Collection reset restores assets', async () => await collectionPage().locator('.asset-card').count() === primary.assets.length);
-    const file = await collectionFile(primary); await verifySource(collectionPage(), file); await verifyContext(collectionPage(), primary);
+    const file = await collectionFile(primary); await verifySource(collectionPage(), file); await assertCatalogControls(page);
     const zip = await downloadFrom(page.locator('.workspace-heading').getByRole('link', { name: 'Скачать коллекцию', exact: true })); assert.equal(zip.filename, `${primary.id}-${primary.version}.zip`); assert.equal(zip.body.readUInt32LE(0), 0x04034b50); assert.equal(zip.body.length, primary.downloadSize); assert.equal(digest(zip.body), primary.downloadSha256);
-    const collectionTabs = collectionPage().getByRole('tablist', { name: 'Содержимое коллекции' }); await collectionTabs.getByRole('tab', { name: 'Файлы и правила', exact: true }).focus(); await page.keyboard.press('ArrowLeft'); await poll('ArrowLeft activates assets', async () => await collectionTabs.getByRole('tab', { name: 'Ассеты', exact: true }).getAttribute('aria-selected') === 'true'); await activeTabLinked(collectionTabs);
-    const otherVersion = catalog.packs.find(pack => pack.id === primary.id && pack.version !== primary.version);
-    if (otherVersion) { const length = await page.evaluate(() => history.length); await chooseVersion(otherVersion); await waitHash({ pack: keyOf(otherVersion) }); assert.equal(await collectionPage().locator('.asset-card').count(), otherVersion.assets.length); if (!mayPreview(otherVersion)) assert.equal(await collectionPage().locator('iframe').count(), 0); await chooseVersion(primary); await waitHash({ pack: keyOf(primary) }); assert.equal(await collectionPage().locator('.asset-card').count(), primary.assets.length); assert.equal(await page.evaluate(() => history.length), length, 'Version selection replaces history'); } else skipped.push('No previous primary version; isolated fixtures cover it.'); checks.push(phase);
+    const collectionTabs = collectionPage().getByRole('tablist', { name: 'Содержимое коллекции' }); await collectionTabs.getByRole('tab', { name: 'Файлы', exact: true }).focus(); await page.keyboard.press('ArrowLeft'); await poll('ArrowLeft activates assets', async () => await collectionTabs.getByRole('tab', { name: 'Ассеты', exact: true }).getAttribute('aria-selected') === 'true'); await activeTabLinked(collectionTabs); checks.push(phase);
 
     phase = 'individual-asset-source-download-and-history';
     await openAsset(primary, primaryAsset); await verifyAssetPreview(assetPage().locator('.asset-detail-preview'), primary, primaryAsset);
     const assetFile = primary.files.find(item => item.path === primaryAsset.path); assert.ok(assetFile);
-    const oneFile = await downloadFrom(page.locator('.workspace-heading').getByRole('link', { name: 'Скачать ассет', exact: true })); assert.equal(oneFile.filename, primaryAsset.path.split('/').at(-1)); assert.equal(digest(oneFile.body), assetFile.sha256); await verifyContext(assetPage(), primary, primaryAsset);
+    const oneFile = await downloadFrom(page.locator('.workspace-heading').getByRole('link', { name: 'Скачать ассет', exact: true })); assert.equal(oneFile.filename, primaryAsset.path.split('/').at(-1)); assert.equal(digest(oneFile.body), assetFile.sha256);
     await assetPage().getByRole('tab', { name: 'Исходник', exact: true }).click(); assert.equal(await assetPage().locator('.files-panel.single-file').count(), 1, 'Asset source only contains its own file'); assert.equal(await assetPage().locator('.file-nav').count(), 0, 'No redundant one-file navigation'); if (textFileEligible(assetFile)) { await readyFile(assetPage(), assetFile); await verifySource(assetPage(), assetFile); } await activeTabLinked(assetPage().getByRole('tablist', { name: 'Данные ассета' }));
-    await page.goBack(); await waitHash({ pack: keyOf(primary) }); await collectionPage().waitFor(); await titleFocus(); await page.goForward(); await waitHash({ pack: keyOf(primary), asset: primaryAsset.id }); await assetPage().waitFor(); await titleFocus();
-    await page.getByRole('navigation', { name: 'Хлебные крошки' }).getByRole('link', { name: primary.title, exact: true }).click(); await waitHash({ pack: keyOf(primary) }); await collectionPage().waitFor(); await home(latest);
-    await page.goto('about:blank'); await page.goto(`${base}/#pack=${keyOf(primary)}&asset=${primaryAsset.id}`, { waitUntil: 'networkidle' }); await assetPage().waitFor(); await titleFocus(); await verifyAssetPreview(assetPage().locator('.asset-detail-preview'), primary, primaryAsset); await home(latest);
+    await assetPage().getByRole('tab', { name: 'Инструкция', exact: true }).click(); assert.equal(await assetPage().locator('.usage-text').textContent(), primaryAsset.usage); assert.ok((await assetPage().locator('.provenance-facts').textContent()).includes(primary.license.id), 'Actual usage and license stay available');
+    await page.goBack(); await waitHash({ pack: primary.id }); await collectionPage().waitFor(); await titleFocus(); await page.goForward(); await waitHash({ pack: primary.id, asset: primaryAsset.id }); await assetPage().waitFor(); await titleFocus();
+    await page.getByRole('navigation', { name: 'Хлебные крошки' }).getByRole('link', { name: primary.title, exact: true }).click(); await waitHash({ pack: primary.id }); await collectionPage().waitFor(); await home(latest);
+    await page.goto('about:blank'); await page.goto(`${base}/#pack=${primary.id}&asset=${primaryAsset.id}`, { waitUntil: 'networkidle' }); await assetPage().waitFor(); await titleFocus(); await verifyAssetPreview(assetPage().locator('.asset-detail-preview'), primary, primaryAsset); await home(latest);
     await page.evaluate(() => { location.hash = 'pack=missing-library-pack@9.9.9'; }); await page.getByRole('heading', { name: 'Страница не найдена', exact: true }).waitFor(); await waitHash({ pack: 'missing-library-pack@9.9.9' }); assert.equal(await page.locator('.collection-page, .asset-page, .pack-detail, iframe').count(), 0); await home(latest); checks.push(phase);
 
-    phase = 'reviewed-autoplay-and-legacy-isolation';
-    for (const pack of catalog.packs.filter(item => item.scripts)) {
-      await page.evaluate(hash => { location.hash = hash; }, `pack=${keyOf(pack)}`); await waitHash({ pack: keyOf(pack) }); await collectionPage().waitFor(); assert.equal(await page.getByRole('button', { name: 'Запустить превью', exact: true }).count(), 0);
+    phase = 'latest-only-legacy-links';
+    await verifyLatestRouting({ page, base, catalog, latest, checks, skipped }); await waitCards(latest); checks.push(phase);
+
+    phase = 'reviewed-autoplay-policy';
+    for (const pack of latest.filter(item => item.scripts)) {
+      await page.evaluate(hash => { location.hash = hash; }, `pack=${pack.id}`); await waitHash({ pack: pack.id }); await collectionPage().waitFor(); await assertCatalogControls(page);
       if (!mayPreview(pack)) { await settle(); assert.equal(await collectionPage().locator('iframe').count(), 0, 'Legacy unapproved scripts remain stopped'); }
       const asset = pack.assets.find(item => item.previewUrl) || pack.assets[0]; await openAsset(pack, asset); await verifyAssetPreview(assetPage().locator('.asset-detail-preview'), pack, asset); await home(latest);
     }
-    if (!catalog.packs.some(pack => pack.scripts)) skipped.push('No script pack; fixture/edge tests exercise reviewed autoplay and legacy denial.'); checks.push(phase);
+    if (!latest.some(pack => pack.scripts)) skipped.push('No current script pack; fixture/edge tests exercise reviewed autoplay and denied imports.'); checks.push(phase);
 
-    phase = 'add-dialog-focus-and-style-nonce';
-    await page.getByRole('button', { name: 'Добавить', exact: true }).click(); const addDialog = page.locator('.add-dialog'); await addDialog.waitFor(); assert.equal(await addDialog.locator('.howto-steps li').count(), 3); assert.match(await addDialog.locator('.privacy-note').textContent(), /публичные/);
+    phase = 'minimal-controls-and-style-nonce';
+    await assertCatalogControls(page); await assertStableLinks(page);
+    await page.locator('.filter-button').click(); await page.locator('.filter-popover').waitFor(); await page.getByRole('combobox', { name: 'Категория', exact: true }).click(); await page.getByRole('option', { name: 'Все категории', exact: true }).waitFor();
     const currentCsp = (await context.request.get('/')).headers()['content-security-policy'] || '', activeNonce = await page.locator('meta[name="csp-nonce"]').getAttribute('content'); const styles = await page.locator('style').evaluateAll(nodes => nodes.map(node => ({ nonce: node.nonce, text: node.textContent }))); assert.ok(styles.some(item => item.text.length));
     for (const style of styles.filter(item => item.text.length)) assert.ok(style.nonce === activeNonce || currentCsp.includes(`'sha256-${createHash('sha256').update(style.text).digest('base64')}'`), 'Injected styles use nonce or exact pinned library hash');
-    await addDialog.getByRole('button', { name: 'Копировать запрос', exact: true }).focus(); await page.keyboard.press('Tab'); assert.ok(await addDialog.evaluate(node => node.contains(document.activeElement))); await addDialog.getByRole('button', { name: 'Закрыть инструкцию', exact: true }).focus(); await page.keyboard.press('Shift+Tab'); assert.ok(await addDialog.evaluate(node => node.contains(document.activeElement)));
-    if (engine === 'chromium') { await addDialog.getByRole('button', { name: 'Копировать запрос', exact: true }).click(); await poll('Real add prompt copied', async () => (await page.evaluate(() => navigator.clipboard.readText())).includes('docs/ADDING_ASSETS.md')); }
-    await shot('add-light-1440'); await page.keyboard.press('Escape'); await addDialog.waitFor({ state: 'hidden' }); assert.ok(await page.getByRole('button', { name: 'Добавить', exact: true }).evaluate(node => document.activeElement === node)); checks.push(phase);
+    await shot('filters-light-1440'); await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await page.locator('.filter-popover').waitFor({ state: 'hidden' }); assert.ok(await page.locator('.filter-button').evaluate(node => document.activeElement === node)); checks.push(phase);
 
     for (const theme of ['light', 'dark']) {
       await chooseTheme(theme);
@@ -249,12 +245,12 @@ try {
         await selectSort('По числу ассетов'); await noOverflow(`${phase}-long-sort-label`); await selectSort('По названию'); await page.locator('.view-switch').getByLabel('Список', { exact: true }).click(); await page.locator('.pack-list').waitFor(); await noOverflow(`${phase}-list`); if (viewport.width === 1440) await shot(`list-${theme}-1440`, true); await page.locator('.view-switch').getByLabel('Плитка', { exact: true }).click();
         await openPack(primary); await noOverflow(`${phase}-collection`); await shot(`collection-${theme}-${viewport.width}`, true); await collectionFile(primary); await noOverflow(`${phase}-all-files`); await shot(`files-${theme}-${viewport.width}`);
         await openAsset(primary, primaryAsset); await verifyAssetPreview(assetPage().locator('.asset-detail-preview'), primary, primaryAsset); await noOverflow(`${phase}-asset`); await shot(`asset-${theme}-${viewport.width}`, true); await assetPage().getByRole('tab', { name: 'Исходник', exact: true }).click(); if (textFileEligible(assetFile)) await readyFile(assetPage(), assetFile); await noOverflow(`${phase}-asset-source`); if (viewport.width === 390 || viewport.width === 1440) await shot(`asset-source-${theme}-${viewport.width}`); await home(latest);
-        if (viewport.width === 320) { await page.locator('.filter-button').click(); await page.locator('.filter-popover').waitFor(); await noOverflow(`${phase}-filters`); await shot(`filters-${theme}-320`); await page.keyboard.press('Escape'); await page.getByRole('button', { name: 'Добавить', exact: true }).click(); await addDialog.waitFor(); await noOverflow(`${phase}-add`); const themed = await addDialog.evaluate(node => ({ dark: node.closest('.radix-themes')?.classList.contains('dark'), font: getComputedStyle(node).fontFamily })); assert.equal(themed.dark, theme === 'dark'); assert.match(themed.font, /Inter/); await shot(`add-${theme}-320`); await page.keyboard.press('Escape'); await addDialog.waitFor({ state: 'hidden' }); }
+        if (viewport.width === 320) { await page.locator('.filter-button').click(); const popover = page.locator('.filter-popover'); await popover.waitFor(); await noOverflow(`${phase}-filters`); const themed = await popover.evaluate(node => ({ dark: node.closest('.radix-themes')?.classList.contains('dark'), font: getComputedStyle(node).fontFamily })); assert.equal(themed.dark, theme === 'dark'); assert.match(themed.font, /Inter/); await shot(`filters-${theme}-320`); await page.keyboard.press('Escape'); await popover.waitFor({ state: 'hidden' }); }
         checks.push(phase);
       }
     }
   }
-  phase = 'runtime-and-security-errors'; await settle();
+  phase = 'runtime-and-security-errors'; await settle(); await assertCatalogControls(page); await assertStableLinks(page); assertLatestResourceRequests(resourceRequests, latest);
   const unexpectedFailures = requestFailures.filter(item => !/(?:ERR_ABORTED|NS_BINDING_ABORTED|AbortError|cancelled|canceled)/i.test(item.error || ''));
   assert.deepEqual(errors, [], 'No uncaught JavaScript errors'); assert.deepEqual(cspErrors, [], 'No CSP violations'); assert.deepEqual(consoleErrors, [], 'No browser console errors'); assert.deepEqual(httpErrors, [], 'No failed HTTP responses'); assert.deepEqual(unexpectedFailures, [], 'No unexpected network failures'); assert.deepEqual(external, [], 'No third-party requests'); checks.push(phase);
   console.log(JSON.stringify({ ok: true, engine, base, packs: latest.length, assets: totalAssets, themes: ['light', 'dark', 'system'], viewports, checks, skipped, screenshots: screenshotFiles, errors, cspErrors, external }, null, 2));

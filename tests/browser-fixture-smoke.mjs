@@ -35,7 +35,7 @@ function readTrustedUi() {
   return outputs;
 }
 
-function preparePack(draft, { title, category, tags, script = false, autoplay = false, documented = false }) {
+function preparePack(draft, { title, category, tags, script = false, autoplay = false, documented = false, retired = false }) {
   const { id, version } = draft.manifest;
   const manifest = {
     ...draft.manifest,
@@ -59,6 +59,11 @@ function preparePack(draft, { title, category, tags, script = false, autoplay = 
     description: 'Метаданные для проверки правил, количества ассетов и контекста чата.',
     usage: 'Прочитать как текст. Не импортировать этот тестовый пак в рабочий каталог.',
   });
+  if (retired) manifest.assets.push({
+    id: 'retired-usage', title: 'Архивная инструкция теста', type: 'documentation', path: 'README.md',
+    description: 'Существует только в предыдущей версии временного набора.',
+    usage: 'Проверка старой ссылки: каталог должен открыть актуальную коллекцию, не архивный ассет.',
+  });
   if (script) {
     manifest.files = [...manifest.files, 'preview/run.js'];
     manifest.assets.push({
@@ -78,7 +83,7 @@ export function createBrowserFixture() {
   const ui = readTrustedUi();
   const fixture = createCatalogFixture({ id: 'qa-browser-foundation', version: '1.0.0' });
   try {
-    preparePack(fixture, { title: 'Альфа: временный тест', category: 'components', tags: ['qa', 'tokens'] });
+    preparePack(fixture, { title: 'Альфа: временный тест', category: 'components', tags: ['qa', 'tokens'], retired: true });
     preparePack(createDraft(fixture.root, { id: 'qa-browser-foundation', version: '1.1.0' }), {
       title: 'Альфа: временный тест', category: 'components', tags: ['qa', 'tokens'], documented: true,
     });

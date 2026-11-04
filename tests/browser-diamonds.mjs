@@ -9,6 +9,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createStaticServer } from '../scripts/serve.mjs';
 import { validatePack } from '../frontend/catalog.mjs';
+import { assertCatalogControls, assertStableLinks, assertLatestResourceRequests } from './browser-latest.mjs';
 
 const ID = 'visual-weblg', VERSION = '1.1.0', KEY = `${ID}@${VERSION}`;
 const CUTS = ['round', 'oval', 'pear', 'marquise', 'cushion', 'princess', 'emerald', 'radiant', 'asscher', 'trillion'];
@@ -21,7 +22,7 @@ assert.ok(['chromium', 'firefox', 'webkit'].includes(engine));
 const executablePath = { chromium: process.env.CHROME_BIN, firefox: process.env.FIREFOX_BIN, webkit: process.env.WEBKIT_BIN }[engine];
 const screenshots = process.env.SCREENSHOTS_DIR ? path.resolve(process.env.SCREENSHOTS_DIR) : null;
 if (screenshots) await mkdir(screenshots, { recursive: true });
-const errors = [], consoleErrors = [], cspErrors = [], external = [], httpErrors = [], warnings = [], checks = [], states = {}, layouts = [];
+const errors = [], consoleErrors = [], cspErrors = [], external = [], httpErrors = [], resourceRequests = [], warnings = [], checks = [], states = {}, layouts = [];
 let server, browser, context, page, base, phase = 'startup';
 
 async function poll(label, action, timeout = 20000) {
@@ -107,6 +108,8 @@ async function ready(locator, cut) {
 async function noPopup() {
   assert.equal(await page.getByRole('dialog').count(), 0, 'Browsing assets never opens a popup');
   assert.equal(await page.getByRole('button', { name: 'Запустить превью', exact: true }).count(), 0, 'This reviewed collection has no launch gate');
+  await assertCatalogControls(page);
+  await assertStableLinks(page);
 }
 async function noOverflow(name) {
   const size = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth }));
@@ -153,6 +156,7 @@ try {
     opened.on('pageerror', error => errors.push(error.message));
     opened.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); else if (message.type() === 'warning') warnings.push(message.text()); });
     opened.on('response', response => { if (response.status() >= 400) httpErrors.push({ url: response.url(), status: response.status() }); });
+    opened.on('request', request => { if (/^https?:/.test(request.url())) resourceRequests.push(request.url()); });
   });
 
   phase = 'catalog-and-ten-independent-downloads';
@@ -196,6 +200,7 @@ try {
   await page.goto(base, { waitUntil: 'domcontentloaded' });
   const card = () => page.locator(`.pack-card[data-pack="${KEY}"]`);
   await card().waitFor();
+  assert.equal(await card().locator('.pack-link').getAttribute('href'), `#pack=${ID}`);
   assert.equal(await page.locator(`.pack-card[data-pack="${ID}@1.0.0"]`).count(), 0, 'Historical version is not duplicated in the latest catalog');
   const coverFrame = await ready(card().locator('iframe'), 'round');
   for (let repeat = 0; repeat < 3; repeat++) {
@@ -226,7 +231,7 @@ try {
     await tile.scrollIntoViewIfNeeded();
     const frame = await ready(tile.locator('iframe'), cut);
     if (cut === 'round') firstFrame = frame;
-    assert.equal(await tile.locator('.asset-link').getAttribute('href'), `#pack=${KEY}&asset=${cut}`);
+    assert.equal(await tile.locator('.asset-link').getAttribute('href'), `#pack=${ID}&asset=${cut}`);
     assert.equal(await tile.locator('.asset-download').getAttribute('href'), `/raw/${ID}/${VERSION}/assets/${cut}.html`);
   }
   await noPopup();
@@ -315,6 +320,7 @@ try {
   assert.deepEqual(cspErrors, [], 'No CSP violations');
   assert.deepEqual(external, [], 'No third-party requests');
   assert.deepEqual(httpErrors, [], 'No failed browser HTTP responses');
+  assertLatestResourceRequests(resourceRequests, [pack]);
   console.log(JSON.stringify({ ok: true, engine, collection: KEY, assets: 10, checks, states, layouts, warnings }, null, 2));
 } catch (error) {
   if (screenshots && page && !page.isClosed()) {

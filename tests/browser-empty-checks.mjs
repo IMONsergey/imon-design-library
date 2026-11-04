@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
+import { assertCatalogControls } from './browser-latest.mjs';
 
 // Public empty catalogs are intentional. Never populate them just to pass QA.
-export async function verifyEmptyCatalog({ page, context, navigation, engine, chooseTheme, appearance, shot, noOverflow, checks, viewports, poll, settle }) {
+export async function verifyEmptyCatalog({ page, context, navigation, chooseTheme, appearance, shot, noOverflow, checks, viewports, poll, settle }) {
   const empty = page.getByRole('heading', { name: 'Пока нет коллекций', exact: true });
-  const add = () => page.getByRole('button', { name: 'Как добавить', exact: true });
   const nav = page.getByRole('navigation', { name: 'Библиотека', exact: true });
   const all = nav.getByRole('link', { name: /^Все коллекции/ });
   const favorites = nav.getByRole('link', { name: /^Избранное/ });
@@ -11,7 +11,7 @@ export async function verifyEmptyCatalog({ page, context, navigation, engine, ch
   assert.equal(await page.locator('.pack-card, iframe, .sidebar-folders').count(), 0);
   assert.equal(await page.getByRole('textbox', { name: 'Поиск по библиотеке' }).count(), 0, 'Do not show a nonfunctional search over an empty library');
   assert.equal(await page.locator('.filter-button, .sort-select, .view-switch').count(), 0);
-  assert.equal(await add().count(), 1, 'One useful action, not repeated add buttons');
+  await assertCatalogControls(page);
   assert.equal(await page.locator('.brand-wordmark').count(), 0, 'No typeset replacement for the logo');
   const logo = page.locator('.brand-logo');
   assert.equal(await logo.getAttribute('viewBox'), '0 0 1496 481');
@@ -75,22 +75,8 @@ export async function verifyEmptyCatalog({ page, context, navigation, engine, ch
       const logoBox = await logo.boundingBox();
       assert.ok(logoBox && logoBox.width > 50 && Math.abs(logoBox.width / logoBox.height - 1496 / 481) < 0.02, 'Official logo proportions are preserved');
       await shot(`catalog-${theme}-${viewport.width}`, true);
-      await add().click();
-      const dialog = page.locator('.add-dialog');
-      await page.getByRole('heading', { name: 'Добавление через чат', exact: true }).waitFor();
-      const box = await dialog.boundingBox();
-      assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width + 1 && box.y + box.height <= viewport.height + 1, `Instruction dialog fits ${viewport.width}`);
-      assert.equal(await page.locator('input[type="file"]').count(), 0, 'No fake upload UI');
-      assert.match(await dialog.locator('.privacy-note').innerText(), /публичные/);
-      if (engine === 'chromium' && viewport.width === 1440) {
-        await dialog.getByRole('button', { name: 'Копировать запрос', exact: true }).click();
-        await poll('Copied prompt identifies the actual repository', async () => (await page.evaluate(() => navigator.clipboard.readText())).includes('IMONsergey/imon-design-library'));
-      }
-      await noOverflow(`instruction-${theme}-${viewport.width}`);
-      await shot(`add-${theme}-${viewport.width}`);
-      await page.keyboard.press('Escape');
-      await dialog.waitFor({ state: 'hidden' });
-      assert.ok(await add().evaluate(node => node === document.activeElement), 'Closing the instruction restores its trigger focus');
+      await assertCatalogControls(page);
+      assert.equal(await page.getByRole('dialog').count(), 0, 'No empty-library onboarding popup');
       checks.push(`empty-${theme}-${viewport.width}`);
     }
   }

@@ -2,57 +2,36 @@ import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from '
 import { createRoot } from 'react-dom/client';
 import { setNonce } from 'get-nonce';
 import { validatePack } from './catalog.mjs';
+import { folderHref, latestPacks, packHref, parseRoute, resolveRoute } from './routing.mjs';
 import { BrandMark } from './brand.jsx';
 import { LivePreview } from './live-preview.jsx';
-import { Button, Dialog, IconButton, Popover, SegmentedControl, Select, Tabs, TextField, Theme, Tooltip } from '@radix-ui/themes';
-import { ArrowDownIcon, ArrowTopRightIcon, BookmarkFilledIcon, BookmarkIcon, CheckIcon, CopyIcon, Cross2Icon, DesktopIcon, DownloadIcon, FileTextIcon, GridIcon, MixerHorizontalIcon, MoonIcon, PlusIcon, RowsIcon, MagnifyingGlassIcon, SunIcon } from '@radix-ui/react-icons';
+import { Button, IconButton, Popover, SegmentedControl, Select, Tabs, TextField, Theme, Tooltip } from '@radix-ui/themes';
+import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowTopRightIcon, BookmarkFilledIcon, BookmarkIcon, CheckIcon, CopyIcon, Cross2Icon, DesktopIcon, DownloadIcon, FileTextIcon, GridIcon, MixerHorizontalIcon, MoonIcon, RowsIcon, MagnifyingGlassIcon, SunIcon } from '@radix-ui/react-icons';
 import '@radix-ui/themes/styles.css';
 import '@fontsource-variable/inter';
 import './styles.css';
 
 const REPOSITORY = 'https://github.com/IMONsergey/imon-design-library';
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const PACK_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*@(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const categoryList = [['design-system', 'Дизайн-системы'], ['components', 'Компоненты'], ['motion', 'Движение'], ['icons', 'Иконки'], ['typography', 'Типографика'], ['guidelines', 'Правила'], ['templates', 'Шаблоны']];
 const categoryName = id => categoryList.find(item => item[0] === id)?.[1] || 'Материалы';
 const pluralRules = new Intl.PluralRules('ru');
-const plural = (count, forms) => count + ' ' + forms[{ one: 0, few: 1, many: 2 }[pluralRules.select(count)] ?? 2];
+const plural = (count, forms) => count + ' ' + forms[({ one: 0, few: 1, many: 2 }[pluralRules.select(count)] ?? 2)];
 const assetCount = count => plural(count, ['ассет', 'ассета', 'ассетов']);
 const packKey = pack => pack.id + '@' + pack.version;
-const packHref = (pack, asset) => '#pack=' + packKey(pack) + (asset ? '&asset=' + asset.id : '');
-const folderHref = id => '#folder=' + id;
-const compareVersion = (a, b) => { const aa = a.version.split('.').map(Number), bb = b.version.split('.').map(Number); for (let i = 0; i < 3; i++) if (aa[i] !== bb[i]) return bb[i] - aa[i]; return 0; };
 const termsFor = value => value.toLocaleLowerCase('ru').trim().split(/\s+/).filter(Boolean);
 const matchesTerms = (terms, values) => { const text = values.join(' ').toLocaleLowerCase('ru'); return terms.every(term => text.includes(term)); };
 const readSetting = (name, fallback) => { try { return localStorage.getItem(name) ?? fallback; } catch { return fallback; } };
 function saveSetting(name, value) { try { localStorage.setItem(name, value); return true; } catch { return false; } }
 function readFavorites() { try { const values = JSON.parse(readSetting('imon-library-favorites', '[]')); return new Set(Array.isArray(values) ? values.filter(value => typeof value === 'string' && SLUG.test(value)) : []); } catch { return new Set(); } }
 function bytes(size) { return size < 1024 ? size + ' Б' : size < 1048576 ? (size / 1024).toLocaleString('ru', { maximumFractionDigits: 1 }) + ' КБ' : (size / 1048576).toLocaleString('ru', { maximumFractionDigits: 1 }) + ' МБ'; }
-function readRoute() {
-  const hash = location.hash, params = new URLSearchParams(hash.slice(1));
-  const key = params.get('pack'), assetId = params.get('asset'), folderId = params.get('folder');
-  if (key && PACK_KEY.test(key) && (!assetId || SLUG.test(assetId))) return { kind: assetId ? 'asset' : 'collection', key, assetId, hash };
-  if (key || assetId) return { kind: 'missing', hash };
-  if (folderId && SLUG.test(folderId)) return { kind: 'folder', folderId, hash };
-  if (params.get('view') === 'favorites') return { kind: 'favorites', hash };
-  if (!hash || hash === '#' || hash === '#catalog') return { kind: 'all', hash };
-  return { kind: 'missing', hash };
-}
+const readRoute = () => parseRoute(location.hash);
 function safeSource(value) { try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password ? url.href : ''; } catch { return ''; } }
 function fileFor(pack, asset) { return pack.files.find(file => file.path === asset.path); }
 function previewFor(pack, asset) {
   const prefix = '/previews/' + pack.id + '/' + pack.version + '/';
   if (typeof asset.previewUrl === 'string' && pack.files.some(file => prefix + file.path === asset.previewUrl)) return asset.previewUrl;
   return !asset.previewUrl && pack.assets.length === 1 ? pack.previewUrl : null;
-}
-function contextFor(pack, asset) {
-  const selected = asset ? [asset] : pack.assets;
-  return ['I’MON Design Library: ' + REPOSITORY, 'Коллекция: ' + pack.title, 'Пак: ' + pack.id, 'Версия: ' + pack.version,
-    ...(pack.folder ? ['Папка: ' + pack.folder.title] : []), ...(asset ? ['Ассет: ' + asset.title, 'Файл: ' + asset.path] : []),
-    'Ссылка: ' + location.origin + '/' + packHref(pack, asset), 'Исходники: packs/' + pack.id + '/' + pack.version + '/',
-    'Манифест: ' + location.origin + pack.manifestUrl, 'Лицензия: ' + pack.license.id, '',
-    'Прочитай AGENTS.md, manifest.json и README. Используй только выбранную коллекцию, не смешивай ее стили с другими системами. Проверь лицензию перед интеграцией.',
-    '', ...selected.map(item => '- ' + item.title + ': ' + item.path)].join('\n');
 }
 const nonce = document.querySelector('meta[name="csp-nonce"]')?.content;
 if (nonce && nonce !== '__IMON_CSP_NONCE__') setNonce(nonce);
@@ -108,7 +87,7 @@ const PackCard = memo(function PackCard({ pack, saved, navigate, onFavorite }) {
   return <article className="pack-card" data-pack={packKey(pack)}>
     <PageLink className="pack-link" href={packHref(pack)} navigate={navigate}>
       <div className="pack-cover"><LivePreview src={pack.previewUrl} title={'Превью ' + pack.title} scripts={pack.scripts} autoplay={pack.autoplay === true} interactive={false} /></div>
-      <div className="pack-body"><p className="pack-category">{pack.folder?.title || categoryName(pack.category)}</p><h2 className="pack-title">{pack.title}</h2><p className="pack-summary">{pack.summary}</p><div className="pack-meta"><span>{assetCount(pack.assets.length)}</span><span className="meta-separator">/</span><span className="version">v{pack.version}</span><span className="open-hint"><ArrowTopRightIcon /></span></div></div>
+      <div className="pack-body"><h2 className="pack-title">{pack.title}</h2><div className="pack-meta"><span>{assetCount(pack.assets.length)}</span><span className="open-hint"><ArrowTopRightIcon /></span></div></div>
     </PageLink>
     <FavoriteButton pack={pack} saved={saved} onFavorite={onFavorite} />
   </article>;
@@ -125,7 +104,7 @@ function FilterMenu({ category, setCategory, tag, setTag, packs, clear }) {
 }
 
 function FileBrowser({ pack, files = pack.files, notify }) {
-  const [filePath, setFilePath] = useState(() => files.find(file => /README\.md$/i.test(file.path))?.path || files[0]?.path || '');
+  const [filePath, setFilePath] = useState(() => files.find(file => pack.assets.some(asset => asset.path === file.path))?.path || files[0]?.path || '');
   const [state, setState] = useState({ status: 'idle', url: '', text: '' });
   const [retry, setRetry] = useState(0);
   const file = files.find(item => item.path === filePath) || files[0];
@@ -151,21 +130,26 @@ function FileBrowser({ pack, files = pack.files, notify }) {
     </div></div>
     {current.status === 'ready' ? <div className="code-scroll" tabIndex={0} aria-label={'Код файла ' + file.path}><pre className="code-lines" aria-hidden="true">{Array.from({ length: Math.min(lines, 10000) }, (_, index) => index + 1).join('\n')}</pre><pre className="code-source"><code>{current.text}</code></pre></div>
       : <div className="code-placeholder">{current.status === 'loading' ? 'Загружаем файл' : current.status === 'error' ? <><p>Не удалось открыть файл.</p><Button size="1" variant="outline" onClick={() => setRetry(value => value + 1)}>Повторить</Button></> : current.status === 'binary' ? <><FileTextIcon /><p>Этот файл удобнее открыть после скачивания.</p>{file && <Button asChild variant="surface" size="2"><a href={file.url} download>Скачать файл</a></Button>}</> : 'Файл не выбран'}</div>}
-    <div className="code-meta"><span>{file ? bytes(file.size) : ''}{lines > 0 ? ' · ' + plural(lines, ['строка', 'строки', 'строк']) : ''}</span><span title={file?.sha256}>SHA-256 {file?.sha256?.slice(0, 12)}…</span></div></div>
+    <div className="code-meta"><span>{file ? bytes(file.size) : ''}{lines > 0 ? ' · ' + plural(lines, ['строка', 'строки', 'строк']) : ''}</span></div></div>
   </div>;
 }
-function PackGuide({ pack, notify }) {
-  return <section className="pack-guide" aria-label="Правила коллекции"><div className="guide-provenance"><h2>О коллекции</h2><dl><div><dt>Автор</dt><dd>{pack.source?.author || 'Не указан'}</dd></div><div><dt>Лицензия</dt><dd>{pack.license.id}</dd></div><div><dt>Проверка</dt><dd>{pack.review?.date || 'Не указана'}</dd></div><div><dt>Версия</dt><dd>{pack.version}</dd></div></dl><p>Условия лицензии сохраняются при использовании. Публикация в каталоге не делает материал свободным.</p>{safeSource(pack.source?.url) && <a className="text-link" href={safeSource(pack.source.url)} target="_blank" rel="noopener noreferrer">Первоисточник <ArrowTopRightIcon /></a>}</div>
-    <div className="guide-assets"><h2>Использование</h2>{pack.assets.map(asset => <article className="guide-asset" key={asset.id}><h3>{asset.title}</h3><p>{asset.description}</p><pre className="usage-text">{asset.usage}</pre></article>)}</div>
-    <Button className="copy-context" variant="surface" color="gray" size="2" onClick={() => notify(contextFor(pack), true)}><CopyIcon />Контекст для чата</Button>
+function PackGuide({ pack }) {
+  const licenseFile = pack.files.find(file => file.path === pack.license.file);
+  const sourceUrl = safeSource(pack.source?.url);
+  return <section className="pack-guide" aria-label="Источник и лицензия">
+    <dl className="provenance-facts">
+      {pack.source?.author && <div><dt>Автор</dt><dd>{pack.source.author}</dd></div>}
+      <div><dt>Лицензия</dt><dd>{licenseFile ? <a href={licenseFile.url} download={licenseFile.path.split('/').at(-1)}>{pack.license.id}</a> : pack.license.id}</dd></div>
+      {sourceUrl && <div><dt>Источник</dt><dd><a href={sourceUrl} target="_blank" rel="noopener noreferrer">Открыть <ArrowTopRightIcon /></a></dd></div>}
+    </dl>
   </section>;
 }
-const AssetCard = memo(function AssetCard({ pack, asset, navigate, notify }) {
+const AssetCard = memo(function AssetCard({ pack, asset, navigate }) {
   const file = fileFor(pack, asset);
   return <article className="asset-card" data-asset={asset.id}>
     <div className="asset-preview"><LivePreview src={previewFor(pack, asset)} title={pack.title + ' / ' + asset.title} scripts={pack.scripts} autoplay={pack.autoplay === true} /></div>
     <div className="asset-card-body"><h2><PageLink className="asset-link" href={packHref(pack, asset)} navigate={navigate}>{asset.title}<ArrowTopRightIcon aria-hidden="true" /></PageLink></h2>
-      <div className="asset-card-actions"><Button variant="ghost" color="gray" size="1" aria-label={'Контекст для чата: ' + asset.title} onClick={() => notify(contextFor(pack, asset), true)}><CopyIcon />Контекст</Button>
+      <div className="asset-card-actions">
         {file && <a className="asset-download" href={file.url} download={file.path.split('/').at(-1)} aria-label={'Скачать ассет: ' + asset.title}><DownloadIcon />Скачать</a>}
       </div>
     </div>
@@ -176,33 +160,29 @@ function CollectionPage({ pack, navigate, notify, query, setQuery, searchRef }) 
   const terms = termsFor(query);
   const assets = pack.assets.filter(asset => matchesTerms(terms, [asset.id, asset.title, asset.description, asset.usage]));
   return <section className="collection-page" data-pack={packKey(pack)}>
-    <p className="page-description">{pack.summary}</p>
     <Tabs.Root className="collection-tabs-root" value={tab} onValueChange={setTab}>
-      <div className="page-tabs-row"><Tabs.List className="page-tabs" aria-label="Содержимое коллекции"><Tabs.Trigger value="assets">Ассеты</Tabs.Trigger><Tabs.Trigger value="files">Файлы и правила</Tabs.Trigger></Tabs.List>
-        <Button className="copy-context" variant="ghost" color="gray" size="1" onClick={() => notify(contextFor(pack), true)}><CopyIcon />Контекст для чата</Button>
+      <div className="page-tabs-row"><Tabs.List className="page-tabs" aria-label="Содержимое коллекции"><Tabs.Trigger value="assets">Ассеты</Tabs.Trigger><Tabs.Trigger value="files">Файлы</Tabs.Trigger></Tabs.List>
       </div>
       <Tabs.Content value="assets" className="collection-assets">
         <div className="asset-toolbar"><SearchField value={query} onChange={setQuery} inputRef={searchRef} collection /><span className="asset-results-count" aria-live="polite">{assetCount(assets.length)}</span></div>
-        {assets.length ? <div className="asset-grid">{assets.map(asset => <AssetCard key={asset.id} pack={pack} asset={asset} navigate={navigate} notify={notify} />)}</div>
+        {assets.length ? <div className="asset-grid">{assets.map(asset => <AssetCard key={asset.id} pack={pack} asset={asset} navigate={navigate} />)}</div>
           : <div className="empty-state"><h2>Ничего не нашлось</h2><p>Попробуй другое название или очисти поиск.</p><Button variant="surface" onClick={() => setQuery('')}>Сбросить поиск</Button></div>}
       </Tabs.Content>
-      <Tabs.Content value="files" className="collection-files"><FileBrowser pack={pack} notify={notify} /><PackGuide pack={pack} notify={notify} /></Tabs.Content>
+      <Tabs.Content value="files" className="collection-files"><FileBrowser pack={pack} notify={notify} /><PackGuide pack={pack} /></Tabs.Content>
     </Tabs.Root>
   </section>;
 }
 function AssetPage({ pack, asset, navigate, notify }) {
   const file = fileFor(pack, asset), index = pack.assets.findIndex(item => item.id === asset.id);
   return <section className="asset-page" data-pack={packKey(pack)} data-asset={asset.id}>
-    <p className="page-description">{asset.description}</p>
     <div className="asset-detail-grid">
       <div className="asset-visual-column"><div className="asset-detail-preview"><LivePreview src={previewFor(pack, asset)} title={pack.title + ' / ' + asset.title} scripts={pack.scripts} autoplay={pack.autoplay === true} /></div>
-        <nav className="asset-pagination" aria-label="Другие ассеты">{index > 0 ? <PageLink href={packHref(pack, pack.assets[index - 1])} navigate={navigate}>← {pack.assets[index - 1].title}</PageLink> : <span />}
-          <span>{index + 1} / {pack.assets.length}</span>{index < pack.assets.length - 1 ? <PageLink href={packHref(pack, pack.assets[index + 1])} navigate={navigate}>{pack.assets[index + 1].title} →</PageLink> : <span />}
+        <nav className="asset-pagination" aria-label="Другие ассеты">{index > 0 ? <PageLink href={packHref(pack, pack.assets[index - 1])} navigate={navigate}><ArrowLeftIcon aria-hidden="true" />{pack.assets[index - 1].title}</PageLink> : <span />}
+          <span>{index + 1} / {pack.assets.length}</span>{index < pack.assets.length - 1 ? <PageLink href={packHref(pack, pack.assets[index + 1])} navigate={navigate}>{pack.assets[index + 1].title}<ArrowRightIcon aria-hidden="true" /></PageLink> : <span />}
         </nav>
       </div>
-      <Tabs.Root className="asset-reference" defaultValue="usage"><Tabs.List className="page-tabs" aria-label="Данные ассета"><Tabs.Trigger value="usage">Инструкция</Tabs.Trigger><Tabs.Trigger value="source">Исходник</Tabs.Trigger></Tabs.List>
-        <Tabs.Content value="usage" className="asset-usage"><h2>Как использовать</h2><pre className="usage-text">{asset.usage}</pre><dl className="asset-facts"><div><dt>Файл</dt><dd>{asset.path}</dd></div><div><dt>Лицензия</dt><dd>{pack.license.id}</dd></div><div><dt>Автор</dt><dd>{pack.source?.author || 'Не указан'}</dd></div></dl>
-          <Button className="copy-context" variant="surface" color="gray" size="2" onClick={() => notify(contextFor(pack, asset), true)}><CopyIcon />Контекст для чата</Button>
+      <Tabs.Root className="asset-reference" defaultValue="source"><Tabs.List className="page-tabs" aria-label="Данные ассета"><Tabs.Trigger value="source">Исходник</Tabs.Trigger><Tabs.Trigger value="usage">Инструкция</Tabs.Trigger></Tabs.List>
+        <Tabs.Content value="usage" className="asset-usage"><pre className="usage-text">{asset.usage}</pre><PackGuide pack={pack} />
           <a className="collection-archive-link text-link" href={pack.downloadUrl} download={pack.id + '-' + pack.version + '.zip'}>Скачать коллекцию <ArrowDownIcon /></a>
         </Tabs.Content>
         <Tabs.Content value="source" className="asset-source">{file ? <FileBrowser pack={pack} files={[file]} notify={notify} /> : <p className="muted-copy">Исходник недоступен.</p>}</Tabs.Content>
@@ -210,22 +190,21 @@ function AssetPage({ pack, asset, navigate, notify }) {
     </div>
   </section>;
 }
-function AddDialog({ open, onOpenChange, notify, toast, triggerLabel = 'Добавить' }) {
-  const prompt = 'Добавь этот материал в I’MON Design Library (' + REPOSITORY + '). Укажи папку и коллекцию. Проверь источник и права, подготовь изолированное превью и инструкцию. Не смешивай разные дизайн-системы. Сначала прочитай AGENTS.md и docs/ADDING_ASSETS.md. Публикуй только материалы, которые разрешено раскрывать.';
-  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Trigger><Button className="add-pack" highContrast size="2"><PlusIcon /><span>{triggerLabel}</span></Button></Dialog.Trigger><Dialog.Content className="add-dialog" maxWidth="520px"><div className="add-dialog-header"><span className="dialog-kicker">Пополнение библиотеки</span><Dialog.Close><IconButton variant="ghost" color="gray" aria-label="Закрыть инструкцию"><Cross2Icon /></IconButton></Dialog.Close></div><Dialog.Title size="6">Добавление через чат</Dialog.Title><Dialog.Description className="add-description">Передай файл или ссылку в чат с доступом к этому репозиторию. Укажи папку и коллекцию для материала.</Dialog.Description><ol className="howto-steps"><li><span>01</span><div><strong>Прикрепи материал</strong><p>Код, компонент, набор иконок или правила.</p></div></li><li><span>02</span><div><strong>Выбери коллекцию</strong><p>Существующую или новую, отдельно от других систем.</p></div></li><li><span>03</span><div><strong>Проверь результат</strong><p>Превью, инструкцию, источник и права на использование.</p></div></li></ol><p className="privacy-note">Сайт и репозиторий публичные. Закрытые клиентские материалы сюда не добавляем.</p><div className="add-dialog-footer"><Button highContrast onClick={() => notify(prompt, true)}><CopyIcon />Копировать запрос</Button><a className="text-link" href={REPOSITORY + '/blob/main/docs/ADDING_ASSETS.md'} target="_blank" rel="noopener noreferrer">Инструкция <ArrowTopRightIcon /></a></div><Toast message={toast} /></Dialog.Content></Dialog.Root>;
-}
-
 function App() {
   const { appearance, choice, choose } = useAppearance();
   const [catalog, setCatalog] = useState([]), [load, setLoad] = useState('loading'), [attempt, setAttempt] = useState(0);
-  const [route, setRoute] = useState(readRoute), [query, setQuery] = useState(''), [category, setCategory] = useState('all'), [tag, setTag] = useState(''), [sort, setSort] = useState('title');
+  const [requestedRoute, setRoute] = useState(readRoute), [query, setQuery] = useState(''), [category, setCategory] = useState('all'), [tag, setTag] = useState(''), [sort, setSort] = useState('title');
   const [assetQueries, setAssetQueries] = useState({});
   const [view, setView] = useState(() => readSetting('imon-library-view', 'grid') === 'list' ? 'list' : 'grid');
-  const [favorites, setFavorites] = useState(readFavorites), [addOpen, setAddOpen] = useState(false), [toast, setToast] = useState('');
+  const [favorites, setFavorites] = useState(readFavorites), [toast, setToast] = useState('');
   const toastTimer = useRef(null), searchRef = useRef(null), titleRef = useRef(null), mainRef = useRef(null);
   const currentHash = useRef(location.hash), positions = useRef(new Map()), movement = useRef('initial');
+  const latest = useMemo(() => latestPacks(catalog), [catalog]);
+  const resolution = useMemo(() => resolveRoute(requestedRoute, latest), [requestedRoute, latest]);
+  const route = load === 'ready' ? resolution.route : requestedRoute;
+  const selected = resolution.pack, selectedAsset = resolution.asset;
   const notify = useCallback(async (message, copy = false) => {
-    if (copy) { try { await navigator.clipboard.writeText(message); } catch { setToast('Не удалось скопировать. Разреши доступ к буферу или выдели код вручную.'); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(''), 4500); return; } }
+    if (copy) { try { await navigator.clipboard.writeText(message); } catch { setToast('Не удалось скопировать. Выдели код вручную.'); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(''), 4500); return; } }
     clearTimeout(toastTimer.current); setToast(copy ? 'Скопировано' : message); toastTimer.current = setTimeout(() => setToast(''), 2600);
   }, []);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
@@ -234,7 +213,7 @@ function App() {
     positions.current.set(currentHash.current, scrollY);
     history[options.replace ? 'replaceState' : 'pushState']({ imonLibrary: true }, '', location.pathname + location.search + href);
     currentHash.current = location.hash; movement.current = options.replace ? 'replace' : 'push';
-    setRoute(readRoute()); setToast(''); setAddOpen(false);
+    setRoute(readRoute()); setToast('');
   }, []);
   useEffect(() => {
     const previous = history.scrollRestoration;
@@ -242,7 +221,7 @@ function App() {
     const changed = () => {
       if (currentHash.current === location.hash) return;
       positions.current.set(currentHash.current, scrollY);
-      currentHash.current = location.hash; movement.current = 'pop'; setRoute(readRoute()); setToast(''); setAddOpen(false);
+      currentHash.current = location.hash; movement.current = 'pop'; setRoute(readRoute()); setToast('');
     };
     addEventListener('hashchange', changed); addEventListener('popstate', changed);
     return () => { history.scrollRestoration = previous; removeEventListener('hashchange', changed); removeEventListener('popstate', changed); };
@@ -257,6 +236,15 @@ function App() {
     return () => controller.abort();
   }, [attempt]);
   useEffect(() => {
+    if (load !== 'ready' || resolution.missing || resolution.canonicalHash === requestedRoute.hash) return;
+    const target = resolution.canonicalHash;
+    const savedPosition = positions.current.get(requestedRoute.hash);
+    if (savedPosition !== undefined) positions.current.set(target, savedPosition);
+    history.replaceState(history.state, '', location.pathname + location.search + target);
+    currentHash.current = target;
+    setRoute(parseRoute(target));
+  }, [load, requestedRoute.hash, resolution.canonicalHash, resolution.missing]);
+  useEffect(() => {
     if (load !== 'ready') return;
     const frame = requestAnimationFrame(() => { titleRef.current?.focus({ preventScroll: true }); scrollTo(0, movement.current === 'pop' ? positions.current.get(route.hash) || 0 : 0); });
     return () => cancelAnimationFrame(frame);
@@ -264,21 +252,17 @@ function App() {
   useEffect(() => {
     const handler = event => {
       const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
-      if (event.key === '/' && searchRef.current && !typing && !addOpen && !document.querySelector('[data-state="open"][role="dialog"]')) { event.preventDefault(); searchRef.current.focus(); }
+      if (event.key === '/' && searchRef.current && !typing && !document.querySelector('[data-state="open"][role="dialog"]')) { event.preventDefault(); searchRef.current.focus(); }
     };
     addEventListener('keydown', handler); return () => removeEventListener('keydown', handler);
-  }, [route.hash, addOpen]);
-  const latest = useMemo(() => { const result = new Map(); for (const pack of [...catalog].sort(compareVersion)) if (!result.has(pack.id)) result.set(pack.id, pack); return [...result.values()]; }, [catalog]);
+  }, [route.hash]);
   const folders = useMemo(() => {
     const result = new Map();
     for (const pack of latest) if (pack.folder) { const folder = result.get(pack.folder.id) || { ...pack.folder, count: 0 }; folder.count++; result.set(folder.id, folder); }
     return [...result.values()].sort((a, b) => a.title.localeCompare(b.title, 'ru'));
   }, [latest]);
-  const selected = useMemo(() => catalog.find(pack => packKey(pack) === route.key) || null, [catalog, route.key]);
-  const selectedAsset = selected?.assets.find(asset => asset.id === route.assetId) || null;
   const selectedFolder = folders.find(folder => folder.id === route.folderId);
-  const versions = useMemo(() => selected ? catalog.filter(pack => pack.id === selected.id).sort(compareVersion) : [], [catalog, selected]);
-  const missing = load === 'ready' && (route.kind === 'missing' || (['asset', 'collection'].includes(route.kind) && !selected) || (route.kind === 'asset' && !selectedAsset) || (route.kind === 'folder' && !selectedFolder));
+  const missing = load === 'ready' && resolution.missing;
   const isListing = ['all', 'folder', 'favorites'].includes(route.kind) && !missing;
   const collectionPacks = useMemo(() => latest.filter(pack => route.kind === 'favorites' ? favorites.has(pack.id) : route.kind === 'folder' ? pack.folder?.id === route.folderId : true), [latest, route.kind, route.folderId, favorites]);
   const filtered = useMemo(() => {
@@ -289,10 +273,6 @@ function App() {
   const toggleFavorite = useCallback(id => setFavorites(current => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); if (!saveSetting('imon-library-favorites', JSON.stringify([...next]))) notify('Избранное сохранено только до закрытия страницы'); return next; }), [notify]);
   const clearFilters = () => { setCategory('all'); setTag(''); };
   const clearSearch = () => { setQuery(''); clearFilters(); };
-  const changeVersion = value => {
-    const target = versions.find(pack => pack.version === value);
-    if (target) navigate(packHref(target, selectedAsset ? target.assets.find(asset => asset.id === selectedAsset.id) : undefined), { replace: true });
-  };
   const pageTitle = missing ? 'Страница не найдена' : route.kind === 'asset' ? selectedAsset?.title || 'Ассет' : route.kind === 'collection' ? selected?.title || 'Коллекция' : route.kind === 'folder' ? selectedFolder?.title || 'Папка' : route.kind === 'favorites' ? 'Избранное' : 'Все коллекции';
   const crumbs = [];
   if (route.kind !== 'all') {
@@ -303,24 +283,22 @@ function App() {
   }
   const savedCount = latest.filter(pack => favorites.has(pack.id)).length;
   const hasPacks = latest.length > 0;
-  const count = isListing ? filtered.length : selected && !selectedAsset ? selected.assets.length : null;
-  const addControl = <AddDialog open={addOpen} onOpenChange={value => { setToast(''); setAddOpen(value); }} notify={notify} toast={toast} triggerLabel={hasPacks ? 'Добавить' : 'Как добавить'} />;
+  const count = isListing ? filtered.length : null;
   return <Theme appearance={appearance} accentColor="gray" grayColor="gray" radius="medium" scaling="100%" panelBackground="solid" hasBackground={false} className="library-theme" data-appearance={appearance}>
     <a className="skip-link" href="#catalog" onClick={event => { event.preventDefault(); mainRef.current?.focus(); mainRef.current?.scrollIntoView(); }}>К каталогу</a>
     <div className="library-frame"><aside className="workspace-sidebar" aria-label="Навигация библиотеки">
       <div className="sidebar-brand"><PageLink className="brand" href="" navigate={navigate} aria-label="I’MON Design Library"><BrandMark /><span className="brand-label">design library</span></PageLink></div>
       <nav className="collection-nav" aria-label="Библиотека"><PageLink className="collection-nav-link" href="" navigate={navigate} beforeNavigate={clearSearch} aria-current={route.kind === 'all' ? 'page' : undefined}><GridIcon /><span>Все коллекции</span><span className="tab-count">{latest.length}</span></PageLink><PageLink className="collection-nav-link" href="#view=favorites" navigate={navigate} beforeNavigate={clearSearch} aria-current={route.kind === 'favorites' ? 'page' : undefined}><BookmarkIcon /><span>Избранное</span><span className="tab-count">{savedCount}</span></PageLink></nav>
       {folders.length > 0 && <nav className="sidebar-folders" aria-label="Папки"><span className="sidebar-label">Папки</span>{folders.map(folder => <PageLink className="folder-nav" key={folder.id} href={folderHref(folder.id)} navigate={navigate} beforeNavigate={clearSearch} data-folder={folder.id} data-active={route.folderId === folder.id || selected?.folder?.id === folder.id ? 'true' : undefined} aria-current={route.kind === 'folder' && route.folderId === folder.id ? 'page' : undefined}><FolderSymbol /><span>{folder.title}</span><span className="tab-count">{folder.count}</span></PageLink>)}</nav>}
-      <div className="sidebar-bottom"><div className="sidebar-links"><a className="text-link" href={REPOSITORY + '/blob/main/docs/ADDING_ASSETS.md'} target="_blank" rel="noopener noreferrer">Инструкция <ArrowTopRightIcon /></a><a className="text-link" href={REPOSITORY} target="_blank" rel="noopener noreferrer">GitHub <ArrowTopRightIcon /></a></div><div className="appearance-control"><span>Оформление</span><ThemeSwitch value={choice} onChange={choose} /></div></div>
+      <div className="sidebar-bottom"><div className="sidebar-links"><a className="text-link" href={REPOSITORY} target="_blank" rel="noopener noreferrer">GitHub <ArrowTopRightIcon /></a></div><div className="appearance-control"><span>Оформление</span><ThemeSwitch value={choice} onChange={choose} /></div></div>
     </aside>
     <main className="library-shell" id="catalog" ref={mainRef} tabIndex={-1}>
       <header className="workspace-heading"><div className="workspace-title"><Breadcrumbs items={crumbs} navigate={navigate} /><div className="page-title-line"><h1 ref={titleRef} tabIndex={-1} className={'page-title' + (route.kind === 'collection' ? ' collection-title' : route.kind === 'asset' ? ' asset-title' : '')}>{pageTitle}</h1>{load === 'ready' && hasPacks && count !== null && <span className="heading-count" aria-live="polite">{count}</span>}</div></div>
-      <div className="heading-actions">{selected && !missing ? <>
-        <Select.Root value={selected.version} onValueChange={changeVersion}><Select.Trigger className="version-select" aria-label="Версия коллекции" variant="surface" /><Select.Content position="popper">{versions.map(pack => <Select.Item key={pack.version} value={pack.version}>v{pack.version}</Select.Item>)}</Select.Content></Select.Root>
+      <div className="heading-actions">{selected && !missing && <>
         <FavoriteButton className="header-bookmark" pack={selected} saved={favorites.has(selected.id)} onFavorite={toggleFavorite} />
         {selectedAsset && fileFor(selected, selectedAsset) ? <Button asChild highContrast size="2"><a href={fileFor(selected, selectedAsset).url} download={selectedAsset.path.split('/').at(-1)}><DownloadIcon />Скачать ассет</a></Button>
           : <Button asChild highContrast size="2"><a href={selected.downloadUrl} download={selected.id + '-' + selected.version + '.zip'}><DownloadIcon />Скачать коллекцию</a></Button>}
-      </> : hasPacks && addControl}</div></header>
+      </>}</div></header>
       {load === 'loading' ? <div className="library-empty"><p className="muted-copy" role="status">Загружаем библиотеку</p></div>
         : load === 'error' ? <div className="library-empty"><div className="empty-copy"><h2>Каталог не загрузился</h2><p>Проверь соединение и попробуй еще раз.</p><Button variant="surface" onClick={() => setAttempt(value => value + 1)}>Попробовать снова</Button></div></div>
         : missing ? <div className="library-empty"><div className="empty-copy"><h2>Не удалось найти этот материал</h2><p>Проверь ссылку или вернись в библиотеку.</p><Button asChild variant="surface"><PageLink href="" navigate={navigate}>Все коллекции</PageLink></Button></div></div>
@@ -329,18 +307,18 @@ function App() {
         : <>
           {hasPacks && <div className="library-toolbar"><SearchField value={query} onChange={setQuery} inputRef={searchRef} /><div className="toolbar-actions"><FilterMenu category={category} setCategory={setCategory} tag={tag} setTag={setTag} packs={collectionPacks} clear={clearFilters} /><Select.Root value={sort} onValueChange={setSort}><Select.Trigger className="sort-select" aria-label="Сортировка коллекций" variant="ghost" /><Select.Content position="popper"><Select.Item value="title">По названию</Select.Item><Select.Item value="category">По категории</Select.Item><Select.Item value="assets">По числу ассетов</Select.Item></Select.Content></Select.Root><SegmentedControl.Root className="view-switch" size="1" aria-label="Вид каталога" value={view} onValueChange={value => { setView(value); saveSetting('imon-library-view', value); }}><SegmentedControl.Item value="grid" aria-label="Плитка" title="Плитка"><GridIcon /></SegmentedControl.Item><SegmentedControl.Item value="list" aria-label="Список" title="Список"><RowsIcon /></SegmentedControl.Item></SegmentedControl.Root></div></div>}
           {(category !== 'all' || tag) && <div className="active-filters">{category !== 'all' && <Button variant="soft" size="1" color="gray" onClick={() => { setCategory('all'); setTag(''); }}>{categoryName(category)}<Cross2Icon /></Button>}{tag && <Button variant="soft" size="1" color="gray" onClick={() => setTag('')}>{tag}<Cross2Icon /></Button>}<button onClick={clearFilters}>Сбросить</button></div>}
-          <div className="catalog-results">{!hasPacks && route.kind === 'all' ? <div className="library-empty"><div className="empty-copy"><h2>Пока нет коллекций</h2><p>Пришли в чат файл или ссылку и укажи, в какую коллекцию его добавить.</p>{addControl}</div></div>
+          <div className="catalog-results">{!hasPacks && route.kind === 'all' ? <div className="library-empty"><div className="empty-copy"><h2>Пока нет коллекций</h2></div></div>
             : filtered.length ? <div className={view === 'list' ? 'pack-list' : 'pack-grid'}>{filtered.map(pack => <PackCard key={packKey(pack)} pack={pack} saved={favorites.has(pack.id)} navigate={navigate} onFavorite={toggleFavorite} />)}</div>
-              : route.kind === 'favorites' && !query && category === 'all' && !tag ? <div className="library-empty"><div className="empty-copy"><h2>Нет сохраненных коллекций</h2><p>Отмечай нужные коллекции закладкой. Они останутся в этом браузере.</p><Button asChild variant="surface"><PageLink href="" navigate={navigate}>Все коллекции</PageLink></Button></div></div>
+              : route.kind === 'favorites' && !query && category === 'all' && !tag ? <div className="library-empty"><div className="empty-copy"><h2>Нет сохраненных коллекций</h2><p>Сохраненные коллекции появятся здесь.</p><Button asChild variant="surface"><PageLink href="" navigate={navigate}>Все коллекции</PageLink></Button></div></div>
                 : <div className="empty-state"><h2>Ничего не нашлось</h2><p>Попробуй другое слово или убери часть фильтров.</p><Button variant="surface" onClick={clearSearch}>Сбросить поиск</Button></div>}</div>
-          {hasPacks && <footer className="catalog-footer"><span>Показано {filtered.length} из {collectionPacks.length}</span><a href="/third-party-notices.txt" target="_blank" rel="noopener noreferrer">Лицензии интерфейса</a></footer>}
         </>}
-    </main></div>{!addOpen && <Toast message={toast} />}
+      <footer className="catalog-footer">{hasPacks && isListing && (query.trim() || category !== 'all' || tag) && <span>Показано {filtered.length} из {collectionPacks.length}</span>}<a href="/third-party-notices.txt" target="_blank" rel="noopener noreferrer">Лицензии интерфейса</a></footer>
+    </main></div><Toast message={toast} />
   </Theme>;
 }
 class CatalogBoundary extends React.Component {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
-  render() { return this.state.failed ? <main className="fatal-error"><h1>Не удалось открыть каталог</h1><p>Обнови страницу. Все материалы сохранены в репозитории.</p><a href={REPOSITORY}>Открыть GitHub</a></main> : this.props.children; }
+  render() { return this.state.failed ? <main className="fatal-error"><h1>Не удалось открыть каталог</h1><p>Обнови страницу или открой репозиторий.</p><a href={REPOSITORY}>Открыть GitHub</a></main> : this.props.children; }
 }
 createRoot(document.getElementById('root')).render(<CatalogBoundary><App /></CatalogBoundary>);

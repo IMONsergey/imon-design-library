@@ -1,16 +1,23 @@
 // Local-only, disposable browser QA. Never targets production or a user profile.
-// The fixture is generated in mkdtemp, then only its metadata is retained.
+// The fixture is generated in mkdtemp; only its test metadata/source bytes remain.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { createStaticServer, PREVIEW_CSP } from '../scripts/serve.mjs';
 import { validatePack } from '../frontend/catalog.mjs';
 import { createCatalogFixture } from './helpers/catalog-fixture.mjs';
+import { assertCatalogControls, assertStableLinks, assertLatestResourceRequests, verifyLatestRouting } from './browser-latest.mjs';
 
 assert.ok(!process.env.LIBRARY_URL, 'Unset LIBRARY_URL: edge QA serves only the local UI build');
 const fixture = createCatalogFixture({ id: 'qa-edge-boundary', version: '1.0.0' });
 let sample;
-try { sample = structuredClone(fixture.catalog.packs[0]); } finally { fixture.cleanup(); }
+const rawBodies = new Map();
+try {
+  sample = structuredClone(fixture.catalog.packs[0]);
+  for (const file of sample.files) rawBodies.set(file.path, fs.readFileSync(path.join(fixture.output, file.url.slice(1))));
+} finally { fixture.cleanup(); }
 assert.ok(sample, 'A disposable fixture supplies valid generated metadata');
 function scriptPack(version, autoplay) {
   const pack = structuredClone(sample);
@@ -25,16 +32,18 @@ function scriptPack(version, autoplay) {
   pack.manifestUrl = `/api/packs/${pack.id}/${version}.json`;
   pack.files = pack.files.map(file => ({ ...file, url: `/raw/${pack.id}/${version}/${file.path}` }));
   pack.assets = pack.assets.map((asset, index) => ({
-    ...asset, id: autoplay ? `${asset.id}-new` : asset.id,
+    ...asset,
     url: `/raw/${pack.id}/${version}/${asset.path}`,
     ...(index === 0 ? { previewUrl: pack.previewUrl } : {}),
   }));
+  pack.assets.push({ ...pack.assets[0], id: autoplay ? 'new-only' : 'retired-only', title: autoplay ? 'Новый тестовый ассет' : 'Архивный тестовый ассет', path: 'README.md', url: `/raw/${pack.id}/${version}/README.md` });
+  delete pack.assets.at(-1).previewUrl;
   return pack;
 }
 const versions = [scriptPack('1.0.0', false), scriptPack('2.0.0', true)];
 let catalog = { schemaVersion: 1, packs: versions }, catalogRequests = 0;
 for (const pack of versions) validatePack(pack, 'http://127.0.0.1');
-const previewRequests = [], previewResponses = [], errors = [], consoleErrors = [], cspErrors = [], external = [], checks = [];
+const previewRequests = [], previewResponses = [], resourceRequests = [], errors = [], consoleErrors = [], cspErrors = [], external = [], checks = [];
 const moduleName = process.env.PLAYWRIGHT_MODULE || 'playwright';
 const playwright = await import(moduleName.startsWith('/') ? pathToFileURL(moduleName).href : moduleName);
 const engine = process.env.BROWSER_ENGINE || 'chromium';
@@ -53,6 +62,13 @@ try {
     const url = new URL(route.request().url());
     if (url.origin !== base) { external.push(url.href); return route.abort(); }
     if (url.pathname === '/api/catalog.json') { catalogRequests++; return route.fulfill({ json: catalog }); }
+    const raw = url.pathname.match(/^\/raw\/qa-script-pack\/(1\.0\.0|2\.0\.0)\/(.+)$/);
+    if (raw && rawBodies.has(raw[2])) {
+      const file = versions.find(pack => pack.version === raw[1]).files.find(item => item.path === raw[2]);
+      const body = rawBodies.get(raw[2]);
+      assert.equal(createHash('sha256').update(body).digest('hex'), file.sha256);
+      return route.fulfill({ contentType: 'text/plain; charset=utf-8', headers: { 'Content-Disposition': 'attachment', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "sandbox; default-src 'none'" }, body });
+    }
     if (url.pathname.startsWith('/previews/')) return route.fulfill({
       contentType: 'text/html; charset=utf-8', headers: { 'Content-Security-Policy': PREVIEW_CSP },
       body: '<!doctype html><html lang="ru"><meta charset="utf-8"><title>Local QA</title><body><p>Изолированное локальное превью</p><script>document.body.dataset.qaReady="true";</script></body></html>',
@@ -63,7 +79,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('response', response => { if (new URL(response.url()).pathname.startsWith('/previews/')) previewResponses.push({ url: response.url(), status: response.status(), headers: response.headers() }); });
-  page.on('request', request => { const url = new URL(request.url()); if (url.origin === base && url.pathname.startsWith('/previews/')) previewRequests.push(url.pathname); });
+  page.on('request', request => { const url = new URL(request.url()); if (url.origin === base) { resourceRequests.push(url.href); if (url.pathname.startsWith('/previews/')) previewRequests.push(url.pathname); } });
   const cards = () => page.locator('.catalog-results:visible .pack-card');
   const collection = () => page.locator('.collection-page');
   const assetPage = () => page.locator('.asset-page');
@@ -89,11 +105,12 @@ try {
     await settle();
     assert.equal(previewRequests.at(-1), pack.previewUrl);
   }
-  async function chooseVersion(version) { await page.getByRole('combobox', { name: 'Версия коллекции', exact: true }).click(); await page.getByRole('option', { name: `v${version}`, exact: true }).click(); }
   async function rootLoad() { await page.goto('about:blank'); await page.goto(base, { waitUntil: 'networkidle' }); }
 
   await rootLoad(); await cards().first().waitFor();
   assert.equal(await cards().count(), 1, 'Only latest version has a catalog card');
+  assert.equal(await cards().locator('.pack-link').getAttribute('href'), '#pack=qa-script-pack');
+  await assertCatalogControls(page); await assertStableLinks(page);
   await preview(cards().first(), versions[1]);
   assert.equal(previewRequests.length, 1, 'Reviewed latest-version cover autoplays once');
   await cards().locator('.pack-link').click(); await collection().waitFor();
@@ -102,27 +119,33 @@ try {
   assert.equal(previewRequests.length, 2, 'Inline collection starts its individual preview');
   await collection().locator('.asset-link').first().click(); await assetPage().waitFor();
   await preview(assetPage(), versions[1]);
+  await assetPage().locator('.code-source code').waitFor();
+  assert.equal(await assetPage().locator('.code-source code').textContent(), rawBodies.get(versions[1].assets[0].path).toString('utf8'));
   assert.equal(previewRequests.length, 3);
   checks.push('reviewed-cover-collection-asset-autoplay', 'opaque-sandbox');
 
-  const historyBeforeVersion = await page.evaluate(() => history.length);
-  await chooseVersion('1.0.0'); await collection().waitFor();
-  await page.waitForFunction(() => new URLSearchParams(location.hash.slice(1)).get('pack') === 'qa-script-pack@1.0.0' && !new URLSearchParams(location.hash.slice(1)).has('asset'));
-  await gated(3, 'Missing asset in older version falls back to the inactive collection');
-  assert.equal(await page.evaluate(() => history.length), historyBeforeVersion, 'Version switching replaces history');
-  await collection().locator('.asset-link').first().click(); await assetPage().waitFor(); await gated(3, 'Legacy asset page');
-  await chooseVersion('2.0.0'); await collection().waitFor();
-  await preview(collection().locator('.asset-card').first(), versions[1]);
-  assert.equal(previewRequests.length, 4);
-  checks.push('version-missing-asset-fallback', 'legacy-version-never-launches');
+  await verifyLatestRouting({ page, base, catalog, latest: [versions[1]], checks });
+  assertLatestResourceRequests(resourceRequests, [versions[1]]);
+  assert.ok(previewRequests.every(url => url.includes('/qa-script-pack/2.0.0/')), 'Legacy links never request historical previews, even transiently');
+  for (const hash of ['pack=qa-script-pack&asset=retired-only', 'pack=qa-script-pack&pack=qa-script-pack', 'pack=qa-script-pack&folder=visual', 'pack=qa-script-pack&unknown=true']) {
+    await page.evaluate(value => { location.hash = value; }, hash);
+    await page.getByRole('heading', { name: 'Страница не найдена', exact: true }).waitFor();
+    assert.equal(await page.locator('.collection-page, .asset-page, iframe').count(), 0);
+    await assertCatalogControls(page);
+  }
+  checks.push('canonical-unknown-asset-and-conflicting-params-fail-closed');
 
+  // A catalog whose newest import has not opted into autoplay must still deny
+  // execution. This is distinct from a stale link to an older published version.
+  const beforeDenied = previewRequests.length;
   catalog = { schemaVersion: 1, packs: [versions[0]] };
-  await rootLoad(); await cards().first().waitFor(); await gated(4, 'Legacy catalog cover');
-  await cards().locator('.pack-link').click(); await collection().waitFor(); await gated(4, 'Legacy inline collection');
-  await collection().locator('.asset-link').first().click(); await assetPage().waitFor(); await gated(4, 'Reopened legacy asset');
+  await rootLoad(); await cards().first().waitFor(); await gated(beforeDenied, 'Unapproved latest cover');
+  await cards().locator('.pack-link').click(); await collection().waitFor(); await gated(beforeDenied, 'Unapproved latest collection');
+  await collection().locator('.asset-link').first().click(); await assetPage().waitFor(); await gated(beforeDenied, 'Unapproved latest asset');
+  await assertCatalogControls(page); await assertStableLinks(page);
   catalog = { schemaVersion: 1, packs: [] }; await rootLoad();
-  await page.getByRole('heading', { name: 'Пока нет коллекций', exact: true }).waitFor(); assert.equal(await cards().count(), 0); await gated(4, 'Empty catalog');
-  checks.push('legacy-card-and-navigation-denial', 'empty-catalog');
+  await page.getByRole('heading', { name: 'Пока нет коллекций', exact: true }).waitFor(); assert.equal(await cards().count(), 0); await gated(beforeDenied, 'Empty catalog'); await assertCatalogControls(page);
+  checks.push('latest-unapproved-script-denial', 'empty-catalog');
 
   const malformed = [
     pack => { pack.scripts = 'false'; },
@@ -134,11 +157,11 @@ try {
   for (const mutate of malformed) {
     const pack = structuredClone(versions[0]); mutate(pack); catalog = { schemaVersion: 1, packs: [pack] };
     await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('heading', { name: 'Каталог не загрузился', exact: true }).waitFor(); await gated(4, 'Rejected metadata');
+    await page.getByRole('heading', { name: 'Каталог не загрузился', exact: true }).waitFor(); await gated(beforeDenied, 'Rejected metadata');
   }
   const beforeRetry = catalogRequests; catalog = { schemaVersion: 1, packs: [versions[0]] };
   await page.getByRole('button', { name: 'Попробовать снова', exact: true }).click(); await cards().first().waitFor();
-  assert.equal(catalogRequests, beforeRetry + 1); await gated(4, 'Recovered legacy catalog');
+  assert.equal(catalogRequests, beforeRetry + 1); await gated(beforeDenied, 'Recovered unapproved latest catalog');
   checks.push('malformed-new-metadata-rejected', 'retry-one-request');
   assert.deepEqual(errors, []); assert.deepEqual(consoleErrors, []); assert.deepEqual(cspErrors, []); assert.deepEqual(external, []);
   console.log(JSON.stringify({ ok: true, engine, localOnly: true, checks, previewRequests, errors, consoleErrors, cspErrors, external }));
